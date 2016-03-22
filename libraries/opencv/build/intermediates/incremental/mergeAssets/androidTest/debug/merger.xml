@@ -1,2 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<merger version="3"><dataSet config="debug"><source path="D:\sdk_project\ZhengRui-visualprivacy-f8d7fd42d465\mobiStream\libraries\opencv\build\intermediates\bundles\debug\assets"/></dataSet><dataSet config="main"><source path="D:\sdk_project\ZhengRui-visualprivacy-f8d7fd42d465\mobiStream\libraries\opencv\src\androidTest\assets"/></dataSet></merger>
+<merger version="3"><dataSet config="debug"><source path="D:\sdk_project\cloudridar_movieapp_client.git\libraries\opencv\build\intermediates\bundles\debug\assets"/></dataSet><dataSet config="main"><source path="D:\sdk_project\cloudridar_movieapp_client.git\libraries\opencv\src\androidTest\assets"/></dataSet></merger>

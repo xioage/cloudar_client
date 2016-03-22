@@ -87,33 +87,19 @@ public class MainActivity extends Activity {
     private DatagramSocket receiverudpsocket;
     private InetAddress serverAddr;
     private int portNum;
+    private int frmCount;
 
     Mat YUVMat;
     Mat BGRMat;
     int scale = 4;
+    float dispscale = (float)1.33;
     Mat BGRMatScaled;
     MatOfInt params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 50);
     FeatureDetector detector = FeatureDetector.create(FeatureDetector.FAST);
 
-    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
-        @Override
-        public void onManagerConnected(int status) {
-            switch (status) {
-                case LoaderCallbackInterface.SUCCESS: {
-                    Log.i(TAG, "OpenCV loaded successfully");
-                }
-                break;
-                default: {
-                    super.onManagerConnected(status);
-                }
-                break;
-            }
-        }
-    };
-
     static {
         System.loadLibrary("opencv_java");
-        System.loadLibrary("nonfree");
+        //System.loadLibrary("nonfree");
     }
 
     @Override
@@ -147,6 +133,8 @@ public class MainActivity extends Activity {
             e.printStackTrace();
         }
         portNum = 51717;
+        frmCount = 0;
+        new startTransmissionTask().execute();
         for (int i = 1; i <= 2; i++) senderTskQueue.add(i);
         for (int i = 1; i <= 2; i++) receiverTskQueue.add(i);
         //new resReceivingTask().execute();
@@ -185,6 +173,52 @@ public class MainActivity extends Activity {
         }
     };
 
+    private class startTransmissionTask extends AsyncTask<byte[], Void, Void> {
+        private byte[] frmsize =  frmsize = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(1).array();
+
+        @Override
+        protected Void doInBackground(byte[]... frmdata) {
+            try {
+                Log.d(TAG, "sending end signals");
+                for(int i = 0; i < 3; i++) {
+                    DatagramPacket frmpacket = new DatagramPacket(frmsize, 4, serverAddr, portNum);
+                    senderudpsocket.send(frmpacket);
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        @Override
+        public void onPostExecute(Void result) {
+        }
+    }
+
+    private class endTransmissionTask extends AsyncTask<byte[], Void, Void> {
+        private byte[] frmsize = new byte[4];
+
+        @Override
+        protected Void doInBackground(byte[]... frmdata) {
+            try {
+                Log.d(TAG, "sending end signals");
+                for(int i = 0; i < 3; i++) {
+                    DatagramPacket frmpacket = new DatagramPacket(frmsize, 4, serverAddr, portNum);
+                    senderudpsocket.send(frmpacket);
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        @Override
+        public void onPostExecute(Void result) {
+        }
+    }
+
     private class frmTransmissionTask extends AsyncTask<byte[], Void, Void> {
         private int tskId;
         private boolean NFT_flag = false;
@@ -207,7 +241,7 @@ public class MainActivity extends Activity {
             // 1. do yuv2rgb in android
             YUVMat.put(0, 0, frmdata[0]);
             Imgproc.cvtColor(YUVMat, BGRMat, Imgproc.COLOR_YUV420sp2BGR);
-            Log.v(TAG, "BGRMatScaled: " + BGRMatScaled.size());
+            //Log.v(TAG, "BGRMatScaled: " + BGRMatScaled.size());
             Imgproc.resize(BGRMat, BGRMatScaled, BGRMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
 
             if (NFT_flag) {
@@ -261,19 +295,15 @@ public class MainActivity extends Activity {
                 imgbuff.get(0, 0, frmdataToSend);
             }
 
+            Log.d(TAG, "datasize: " + datasize);
+            frmsize = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(datasize).array();
+            packetContent = new byte[4 + datasize];
+            System.arraycopy(frmsize, 0, packetContent, 0, 4);
+            System.arraycopy(frmdataToSend, 0, packetContent, 4, datasize);
+
             try {
-                Log.d(TAG, "datasize: " + datasize);
-                frmsize = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(datasize).array();
-
-                packetContent = new byte[4 + datasize];
-                System.arraycopy(frmsize, 0, packetContent, 0, 4);
-                System.arraycopy(frmdataToSend, 0, packetContent, 4, datasize);
-                if(serverAddr != null) {
-                    DatagramPacket frmpacket = new DatagramPacket(packetContent, 4 + datasize, serverAddr, portNum);
-                    senderudpsocket.send(frmpacket);
-                    Log.d(TAG, "packet sent");
-                }
-
+                DatagramPacket frmpacket = new DatagramPacket(packetContent, 4 + datasize, serverAddr, portNum);
+                senderudpsocket.send(frmpacket);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -697,9 +727,17 @@ public class MainActivity extends Activity {
         mCamera.setPreviewCallbackWithBuffer(null);
 
         mCamera.release();
+        new endTransmissionTask().execute();
         mCamera = null;
         mInPreview = false;
         super.onPause();
+    }
+
+    @Override
+    public void onStop()
+    {
+        Log.i(TAG, " onStop() called.");
+        super.onStop();
     }
 
     @Override
@@ -809,7 +847,7 @@ public class MainActivity extends Activity {
 
             if (resPoints != null) {
                 for (int i = 0; i < resPoints.length; i+=4) {
-                    canvas.drawLine(resPoints[i], resPoints[i+1], resPoints[i+2], resPoints[i+3], paintPoster);
+                    canvas.drawLine(resPoints[i] * dispscale, resPoints[i+1] * dispscale, resPoints[i+2] * dispscale, resPoints[i+3] * dispscale, paintPoster);
                 }
                 resPoints = null;
             }
