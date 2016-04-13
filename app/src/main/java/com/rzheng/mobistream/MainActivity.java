@@ -78,7 +78,6 @@ public class MainActivity extends Activity {
     private static final String TAG = "Poster";
     private byte[] callbackBuffer;
     private Queue<Integer> senderTskQueue = new LinkedList<Integer>();
-    private Queue<Integer> receiverTskQueue = new LinkedList<Integer>();
 
     private DrawOnTop mDraw;
 
@@ -91,15 +90,20 @@ public class MainActivity extends Activity {
     private int portNum;
     private int frmID = 1;
 
-    private Mat YUVMat;
+    private Mat YUVMatTrack, YUVMatTrans, YUVMatScaled;
     private Mat BGRMat;
+    private Mat BGRMatScaled;
     private Mat GRAYMat, PreGRAYMat;
     private MatOfPoint initial = null;
     private MatOfPoint2f Points1, Points2;
     private MatOfPoint2f HistoryPoints;
+    private int HistoryID, resID;
     private byte[] bitmap1, bitmap2, historybitmap;
-    private Mat Rec1, Rec2;
-    private Mat BGRMatScaled;
+    private int markerNum = 0;
+    private int[] markerIDs;
+    private String[] markerNames;
+    private Mat Rec0, Rec1, Rec2;
+    private Mat H;
     private MatOfInt params;
     private FeatureDetector detector;
     private TermCriteria termcrit;
@@ -113,7 +117,7 @@ public class MainActivity extends Activity {
     private final int IMAGE_DETECT = 2;
     private final int TRACKPOINTS = 3;
     private final int FEATURES = 4;
-    private final int MAX_POINTS = 20;
+    private final int MAX_POINTS = 30;
     private final int FREQUENCY = 30;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
@@ -152,7 +156,7 @@ public class MainActivity extends Activity {
         try {
             senderudpsocket = new DatagramSocket();
             receiverudpsocket = new DatagramSocket(51718);
-            receiverudpsocket.setSoTimeout(500);
+            receiverudpsocket.setSoTimeout(1000);
         } catch (SocketException e) {
             e.printStackTrace();
         }
@@ -164,14 +168,15 @@ public class MainActivity extends Activity {
         portNum = 51717;
         new startTransmissionTask().execute();
         for (int i = 1; i <= 1; i++) senderTskQueue.add(i);
-        //for (int i = 1; i <= 1; i++) receiverTskQueue.add(i);
     }
 
     SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {
         public void surfaceCreated(SurfaceHolder holder) {
             Log.i(TAG, " surfaceCreated() called.");
             initPreview(1920, 1080);
-            YUVMat = new Mat(size.height + size.height / 2, size.width, CvType.CV_8UC1);
+            YUVMatTrack = new Mat(size.height + size.height / 2, size.width, CvType.CV_8UC1);
+            YUVMatTrans = new Mat(size.height + size.height / 2, size.width, CvType.CV_8UC1);
+            YUVMatScaled = new Mat((size.height + size.height / 2) / scale, size.width / scale, CvType.CV_8UC1);
             BGRMat = new Mat(size.height, size.width, CvType.CV_8UC3);
             BGRMatScaled = new Mat(size.height / scale, size.width / scale, CvType.CV_8UC3);
             params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 50);
@@ -197,11 +202,10 @@ public class MainActivity extends Activity {
         public void onPreviewFrame(byte[] data, Camera camera) {
             if (senderTskQueue.peek() != null) {
                 new frmTrackingTask(senderTskQueue.poll()).execute(data);
-                if(frmID % FREQUENCY == 1)
+                if(frmID % FREQUENCY == 1) {
                     new frmTransmissionTask(frmID).execute(data);
-            }
-            if (receiverTskQueue.peek() != null) {
-                new resReceivingTask(receiverTskQueue.poll()).execute();
+                    new resReceivingTask(frmID).execute();
+                }
             }
             mCamera.addCallbackBuffer(callbackBuffer);
         }
@@ -263,20 +267,16 @@ public class MainActivity extends Activity {
         @Override
         protected Void doInBackground(byte[]... frmdata) {
             // 1. do yuv2rgb in android
-            YUVMat.put(0, 0, frmdata[0]);
-            Imgproc.cvtColor(YUVMat, BGRMat, Imgproc.COLOR_YUV420sp2BGR);
-            Imgproc.resize(BGRMat, BGRMatScaled, BGRMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-
-            //tracking
+            YUVMatTrack.put(0, 0, frmdata[0]);
+            Imgproc.resize(YUVMatTrack, YUVMatScaled, YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
             GRAYMat = new Mat(size.height / scale, size.width / scale, CvType.CV_8UC1);
-            Imgproc.cvtColor(BGRMatScaled, GRAYMat, Imgproc.COLOR_BGR2GRAY);
-            Imgproc.equalizeHist(GRAYMat, GRAYMat);
+            Imgproc.cvtColor(YUVMatScaled, GRAYMat, Imgproc.COLOR_YUV2GRAY_420);
+            //Imgproc.equalizeHist(GRAYMat, GRAYMat);
 
             if (initial == null) {
                 Log.v(TAG, "get tracking points");
                 initial = new MatOfPoint();
                 Imgproc.goodFeaturesToTrack(GRAYMat, initial, MAX_POINTS, 0.01, 10, new Mat(), 3, false, 0.04);
-                //Imgproc.goodFeaturesToTrack(GRAYMat, initial, maxpoint, 0.01, 10);
                 Points1 = new MatOfPoint2f(initial.toArray());
                 bitmap1 = new byte[MAX_POINTS];
                 for(int i = 0; i < Points1.rows(); i++)
@@ -299,20 +299,27 @@ public class MainActivity extends Activity {
                         continue;
                     }
 
-                    Points1.put(k, 0, Points1.get(i, 0));
-                    Points2.put(k, 0, Points2.get(i, 0));
+                    if(k != i) {
+                        Points1.put(k, 0, Points1.get(i, 0));
+                        Points2.put(k, 0, Points2.get(i, 0));
+                    }
                     k++;
                     bitmap2[j++] = 1;
                 }
-                Points1 = new MatOfPoint2f(Points1.rowRange(0, k));
-                Points2 = new MatOfPoint2f(Points2.rowRange(0, k));
+                if(k != Points1.rows())
+                    Points1 = new MatOfPoint2f(Points1.rowRange(0, k));
+                if(k != Points2.rows())
+                    Points2 = new MatOfPoint2f(Points2.rowRange(0, k));
                 Log.v(TAG, "tracking points left: " + k);
 
+                if(Rec0 != null) {
+                    Rec1 = Rec0;
+                    Rec0 = null;
+                }
                 if(Rec1 != null) {
                     if (k > 4) {
-                        Rec2 = new Mat(4, 1, CvType.CV_32FC2);
-                        Mat H;
-                        if(PosterRecognized) {
+                        if(PosterRecognized && HistoryID == resID) {
+                            Log.d(TAG, "Recover from history frame: " + HistoryID);
                             for(i = k = j = 0; i < HistoryPoints.rows(); i++) {
                                 while(historybitmap[j] == 0) j++;
 
@@ -331,7 +338,7 @@ public class MainActivity extends Activity {
                         else
                             H = Calib3d.findHomography(Points1, Points2, Calib3d.RANSAC, 3);
 
-                        //Log.v(TAG, "frm" + frmID + " H:" + H.dump());
+                        Rec2 = new Mat(Rec1.rows(), 1, CvType.CV_32FC2);
                         Core.perspectiveTransform(Rec1, Rec2, H);
                     }
                     else {
@@ -347,8 +354,9 @@ public class MainActivity extends Activity {
             }
             PreGRAYMat = GRAYMat;
             if(frmID % FREQUENCY == 1) {
-                HistoryPoints = Points1;
-                historybitmap = bitmap1;
+                HistoryID = frmID;
+                HistoryPoints = new MatOfPoint2f(Points1.clone());
+                historybitmap = bitmap1.clone();
             }
 
             frmID++;
@@ -357,8 +365,8 @@ public class MainActivity extends Activity {
 
         @Override
         public void onPostExecute(Void result) {
-            //Log.i(TAG, "Asynctask - " + tskId + " ended.");
-            mDraw.invalidate();
+            if(markerNum != 0)
+                mDraw.invalidate();
             senderTskQueue.add(this.tskId);
         }
     }
@@ -375,14 +383,12 @@ public class MainActivity extends Activity {
 
         public frmTransmissionTask(int frmID) {
             this.frmID = frmID;
-            //Log.i(TAG, "Asynctask - " + tskId + " started.");
         }
 
         @Override
         protected Void doInBackground(byte[]... frmdata) {
-            // 1. do yuv2rgb in android
-            YUVMat.put(0, 0, frmdata[0]);
-            Imgproc.cvtColor(YUVMat, BGRMat, Imgproc.COLOR_YUV420sp2BGR);
+            YUVMatTrans.put(0, 0, frmdata[0]);
+            Imgproc.cvtColor(YUVMatTrans, BGRMat, Imgproc.COLOR_YUV420sp2BGR);
             Imgproc.resize(BGRMat, BGRMatScaled, BGRMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
 
             if (dataType == IMAGE_DETECT) {
@@ -421,24 +427,23 @@ public class MainActivity extends Activity {
                 DatagramPacket frmpacket = new DatagramPacket(packetContent, packetContent.length, serverAddr, portNum);
                 senderudpsocket.send(frmpacket);
             } catch (IOException e) {
-                e.printStackTrace();
+                //e.printStackTrace();
             }
 
-            receiverTskQueue.add(1);
             return null;
         }
     }
 
     private class resReceivingTask extends AsyncTask<Void, Void, Void> {
-        private int tskID;
-        private int ressize;
-        private int resID;
+        private int frmID;
         private byte[] res = new byte[400];
-        private float[] floatres = new float[100];
+        private float[] floatres = new float[8];
         private byte[] tmp = new byte[4];
+        private byte[] name = new byte[14];
+        private int newMarkerNum;
 
-        public resReceivingTask (int tskID) {
-            this.tskID = tskID;
+        public resReceivingTask (int frmID) {
+            this.frmID = frmID;
         }
 
         protected Void doInBackground(Void... arg) {
@@ -446,34 +451,41 @@ public class MainActivity extends Activity {
                 DatagramPacket resPacket = new DatagramPacket(res, res.length);
                 receiverudpsocket.receive(resPacket);
             } catch (IOException e) {
-                e.printStackTrace();
-                //Log.i(TAG, "Asynctask - " + tskId + " failed.");
+                //e.printStackTrace();
             }
 
             System.arraycopy(res, 0, tmp, 0, 4);
             resID = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
             System.arraycopy(res, 4, tmp, 0, 4);
-            ressize = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
-            Log.d(TAG, "res id: " + resID + ", res size: " + ressize);
+            newMarkerNum = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            Log.d(TAG, "res id: " + resID + ", new marker num: " + markerNum);
 
-            if(ressize != 0) {
-                for (int i = 0; i < ressize / 4; i++) {
-                    System.arraycopy(res, i * 4 + 8, tmp, 0, 4);
-                    floatres[i] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+            if(this.frmID == resID && newMarkerNum != 0) {
+                markerNum = newMarkerNum;
+                markerIDs = new int[markerNum];
+                markerNames = new String[markerNum];
+                Rec0 = new Mat(4 * markerNum, 1, CvType.CV_32FC2);
+                for (int i = 0; i < markerNum; i++) {
+                    System.arraycopy(res, 8 + i * 50, tmp, 0, 4);
+                    markerIDs[i] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
+
+                    for (int j = 0; j < 8; j++) {
+                        System.arraycopy(res, 12 + i * 50 + j * 4, tmp, 0, 4);
+                        floatres[j] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+                    }
+                    for (int j = 0; j < 4; j++)
+                        Rec0.put(4 * i + j, 0, new float[]{floatres[j * 2], floatres[j * 2 + 1]});
+
+                    System.arraycopy(res, 44 + i * 50, name, 0, 14);
+                    String markerName = new String(name);
+                    markerNames[i] = markerName.substring(0, markerName.indexOf("."));
                 }
-                //Rec1 = new MatOfPoint2f(new Point(doubleres[0], doubleres[1]), new Point(doubleres[2], doubleres[3]), new Point(doubleres[4], doubleres[5]), new Point(doubleres[6], doubleres[7]));
-                Rec1 = new Mat(4, 1, CvType.CV_32FC2);
-                for(int i = 0; i < 4; i++)
-                    Rec1.put(i, 0, new float[]{floatres[i*2], floatres[i*2+1]});
                 PosterRecognized = true;
             }
+            else {
+                Log.d(TAG, "outdated res, discard");
+            }
             return null;
-        }
-
-        @Override
-        public void onPostExecute(Void result) {
-            //mDraw.invalidate();
-            //receiverTskQueue.add(this.tskID);
         }
     }
 
@@ -555,7 +567,6 @@ public class MainActivity extends Activity {
         senderudpsocket.close();
         receiverudpsocket.close();
         senderTskQueue.clear();
-        receiverTskQueue.clear();
         Log.i(TAG, " onDestroy() called.");
         /*
         if (socket != null) try {
@@ -580,6 +591,7 @@ public class MainActivity extends Activity {
 
         Paint paintFace;
         Paint paintPoster;
+        Paint paintWord;
 
         public DrawOnTop(Context context) {
             super(context);
@@ -593,6 +605,13 @@ public class MainActivity extends Activity {
             paintPoster.setStyle(Paint.Style.STROKE);
             paintPoster.setStrokeWidth(10);
             paintPoster.setColor(Color.RED);
+
+            paintWord = new Paint();
+            paintWord.setStyle(Paint.Style.STROKE);
+            paintWord.setStrokeWidth(5);
+            paintWord.setColor(Color.YELLOW);
+            paintWord.setTextAlign(Paint.Align.CENTER);
+            paintWord.setTextSize(50);
         }
 
 
@@ -605,18 +624,21 @@ public class MainActivity extends Activity {
             /*
             if (Points1 != null) {
                 Point[] points = Points1.toArray();
-                for(int i = 0; i < points.length; i+=5) {
+                for(int i = 0; i < points.length; i++) {
                     canvas.drawCircle(dispscale * (float)points[i].x, dispscale * (float)points[i].y, 5, paintFace);
                 }
             }*/
 
-            if (Rec1 != null) {
-                float[][] points = new float[4][2];
-                for(int i = 0; i < 4; i++) {
+            if (markerNum != 0) {
+                float[][] points = new float[4*markerNum][2];
+                for(int i = 0; i < 4*markerNum; i++) {
                     Rec1.get(i, 0, points[i]);
                 }
-                for(int i = 0; i < 4; i++) {
-                    canvas.drawLine(dispscale * points[i][0], dispscale * points[i][1], dispscale * points[(i+1)%4][0], dispscale * points[(i+1)%4][1], paintPoster);
+                for(int i = 0; i < markerNum; i++) {
+                    for(int j = 0; j < 3; j++)
+                        canvas.drawLine(dispscale * points[i*4+j][0], dispscale * points[i*4+j][1], dispscale * points[i*4+j+1][0], dispscale * points[i*4+j+1][1], paintPoster);
+                    canvas.drawLine(dispscale * points[i*4+3][0], dispscale * points[i*4+3][1], dispscale * points[i*4][0], dispscale * points[i*4][1], paintPoster);
+                    canvas.drawText(markerNames[i], dispscale*points[i*4][0]+400, dispscale*points[i*4][1]+200, paintWord);
                 }
             }
         }
