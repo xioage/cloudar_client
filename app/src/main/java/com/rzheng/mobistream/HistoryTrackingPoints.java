@@ -9,9 +9,9 @@ public class HistoryTrackingPoints {
     public int HistoryFrameID;
     public int HistoryTrackingID;
     public MatOfPoint2f HistoryPoints;
-    public byte[] historybitmap;
+    public int[] historybitmap;
 
-    public HistoryTrackingPoints(int HistoryFrameID, int HistoryTrackingID, MatOfPoint2f HistoryPoints, byte[] historybitmap) {
+    public HistoryTrackingPoints(int HistoryFrameID, int HistoryTrackingID, MatOfPoint2f HistoryPoints, int[] historybitmap) {
         this.HistoryFrameID = HistoryFrameID;
         this.HistoryTrackingID = HistoryTrackingID;
         this.HistoryPoints = HistoryPoints;
