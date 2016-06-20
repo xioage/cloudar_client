@@ -9,9 +9,8 @@ import android.hardware.Camera;
 import android.hardware.Camera.Size;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.ContactsContract;
 import android.util.Log;
+import android.view.Display;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -25,45 +24,27 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
-import org.opencv.core.MatOfDMatch;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfInt;
-import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
-import org.opencv.core.Rect;
-import org.opencv.core.Scalar;
 import org.opencv.core.TermCriteria;
-import org.opencv.features2d.DMatch;
-import org.opencv.features2d.DescriptorExtractor;
-import org.opencv.features2d.DescriptorMatcher;
 import org.opencv.features2d.FeatureDetector;
-import org.opencv.features2d.Features2d;
-import org.opencv.features2d.KeyPoint;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.video.Video;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.Socket;
-import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Queue;
 
 public class MainActivity extends Activity {
@@ -78,11 +59,13 @@ public class MainActivity extends Activity {
     private static final String TAG = "Poster";
     private byte[] callbackBuffer;
     private Queue<Integer> senderTskQueue = new LinkedList<Integer>();
+    private int time_o, time_n, fps;
 
     private DatagramSocket senderudpsocket;
     private DatagramSocket receiverudpsocket;
     private InetAddress serverAddr;
     private int portNum;
+    private String ip = "10.89.88.173";
 
     private Mat YUVMatTrack, YUVMatTrans, YUVMatScaled;
     private Mat BGRMat, BGRMatScaled;
@@ -105,16 +88,20 @@ public class MainActivity extends Activity {
     private boolean InitializeNeeded = true;
     private boolean PosterChanged = false;
     private boolean PosterRecognized = false;
+    private boolean ShowFPS = true;
+    private boolean ShowPoints = false;
+    private boolean EnableMultipleTracking = false;
 
     private final int scale = 4;
-    private final float dispscale = (float)1.33 * scale;
     private final int IMAGE_TRACK = 1;
     private final int IMAGE_DETECT = 2;
     private final int TRACKPOINTS = 3;
     private final int FEATURES = 4;
-    private final int MAX_POINTS = 30;
-    private final int FREQUENCY = 30;
+    private final int MAX_POINTS = 50;
+    private final int FREQUENCY = 60;
+    private float dispscale;
 
+    /*
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
@@ -130,7 +117,11 @@ public class MainActivity extends Activity {
                 } break;
             }
         }
-    };
+    };*/
+
+    static {
+        System.loadLibrary("opencv_java");
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -144,6 +135,13 @@ public class MainActivity extends Activity {
         mPreviewHolder = mPreview.getHolder();
         mPreviewHolder.addCallback(surfaceCallback);
 
+        Display disp = getWindowManager().getDefaultDisplay();
+        if(disp.getHeight() == 1920)
+            dispscale = scale;
+        else
+            dispscale = (float)1.33 * scale;
+        Log.d(TAG, "dispscale: " + dispscale);
+
         mDraw = new DrawOnTop(this);
         addContentView(mDraw, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -151,12 +149,12 @@ public class MainActivity extends Activity {
         try {
             senderudpsocket = new DatagramSocket();
             receiverudpsocket = new DatagramSocket(51718);
-            receiverudpsocket.setSoTimeout(1500);
+            receiverudpsocket.setSoTimeout(5000);
         } catch (SocketException e) {
             e.printStackTrace();
         }
         try {
-            serverAddr = InetAddress.getByName("10.89.170.29");
+            serverAddr = InetAddress.getByName(ip);
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
@@ -196,14 +194,13 @@ public class MainActivity extends Activity {
         @Override
         public void onPreviewFrame(byte[] data, Camera camera) {
             if (senderTskQueue.peek() != null) {
-                new frmTrackingTask(senderTskQueue.poll()).execute(data);
-                if(frmID % FREQUENCY == 1) {
+                if (frmID % FREQUENCY == 5) {
                     new frmTransmissionTask(frmID).execute(data);
+                    new resReceivingTask(frmID).execute();
                 }
-                if(frmID % FREQUENCY == 6) {
-                    new resReceivingTask().execute();
-                }
+                new frmTrackingTask(senderTskQueue.poll()).execute(data);
             }
+
             mCamera.addCallbackBuffer(callbackBuffer);
         }
     };
@@ -302,7 +299,10 @@ public class MainActivity extends Activity {
                         Points2.put(k, 0, Points2.get(i, 0));
                     }
                     k++;
-                    bitmap2[j] = bitmap1[j];
+                    if(EnableMultipleTracking)
+                        bitmap2[j] = bitmap1[j];
+                    else
+                        bitmap2[j] = 1;
                     j++;
                 }
                 if(k != Points1.rows())
@@ -314,13 +314,15 @@ public class MainActivity extends Activity {
                 if(k > 4) {
                     if (Markers1 != null && Markers1.Num != 0) {
                         if (PosterRecognized) {
-                            Log.d(TAG, "Recover from history frame: " + resID);
+                            Log.d(TAG, "frm " + frmID + " recover from " + resID);
 
                             do {
                                 curHistory = HistoryQueue.poll();
                             } while (curHistory.HistoryFrameID != resID);
 
                             if (curHistory.HistoryTrackingID == trackingID) {
+                                //Log.d(TAG, "History found for frame " + resID);
+
                                 for (i = k = j = 0; i < curHistory.HistoryPoints.rows(); i++) {
                                     while (curHistory.historybitmap[j] == 0) j++;
 
@@ -334,7 +336,7 @@ public class MainActivity extends Activity {
                                 }
                                 curHistory.HistoryPoints = new MatOfPoint2f(curHistory.HistoryPoints.rowRange(0, k));
 
-                                if(PosterChanged) {
+                                if(!EnableMultipleTracking || PosterChanged) {
                                     Mat H = Calib3d.findHomography(curHistory.HistoryPoints, Points2, Calib3d.RANSAC, 3);
                                     for (int m = 0; m < Markers1.Num; m++) {
                                         Markers1.Homographys[m] = H;
@@ -355,23 +357,33 @@ public class MainActivity extends Activity {
                                         Markers1.Homographys[m] = Calib3d.findHomography(subHistoryPoints[m], subPoints2[m], Calib3d.RANSAC, 3);
                                     }
                                 }
+                            } else {
+
                             }
 
                             PosterRecognized = false;
                         } else {
-                            subPoints1 = new MatOfPoint2f[Markers1.Num];
-                            subPoints2 = new MatOfPoint2f[Markers1.Num];
-                            for (int m = 0; m < Markers1.Num; m++) {
-                                subPoints1[m] = new MatOfPoint2f(new Mat(Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                subPoints2[m] = new MatOfPoint2f(new Mat(Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                int count = 0;
-                                for (int n = 0; n < Points2.rows(); n++) {
-                                    if (bitmap2[n] == Markers1.IDs[m]) {
-                                        subPoints1[m].put(count, 0, Points1.get(n, 0));
-                                        subPoints2[m].put(count++, 0, Points2.get(n, 0));
+                            if(EnableMultipleTracking) {
+                                subPoints1 = new MatOfPoint2f[Markers1.Num];
+                                subPoints2 = new MatOfPoint2f[Markers1.Num];
+
+                                for (int m = 0; m < Markers1.Num; m++) {
+                                    subPoints1[m] = new MatOfPoint2f(new Mat(Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
+                                    subPoints2[m] = new MatOfPoint2f(new Mat(Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
+                                    int count = 0;
+                                    for (int n = 0; n < Points2.rows(); n++) {
+                                        if (bitmap2[n] == Markers1.IDs[m]) {
+                                            subPoints1[m].put(count, 0, Points1.get(n, 0));
+                                            subPoints2[m].put(count++, 0, Points2.get(n, 0));
+                                        }
                                     }
+                                    Markers1.Homographys[m] = Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3);
                                 }
-                                Markers1.Homographys[m] = Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3);
+                            } else {
+                                Mat H = Calib3d.findHomography(Points1, Points2, Calib3d.RANSAC, 3);
+                                for (int m = 0; m < Markers1.Num; m++) {
+                                    Markers1.Homographys[m] = H;
+                                }
                             }
                         }
 
@@ -402,7 +414,7 @@ public class MainActivity extends Activity {
                 trackingID++;
 
                 bitmap1 = new int[MAX_POINTS];
-                if(!PosterChanged) {
+                if(!EnableMultipleTracking || !PosterChanged) {
                     for (int i = 0; i < Points1.rows(); i++)
                         bitmap1[i] = 1;
                 } else {
@@ -421,7 +433,7 @@ public class MainActivity extends Activity {
             }
 
             PreGRAYMat = GRAYMat;
-            if(frmID % FREQUENCY == 1) {
+            if(frmID % FREQUENCY == 5) {
                 HistoryQueue.add(new HistoryTrackingPoints(frmID, trackingID, new MatOfPoint2f(Points1.clone()), bitmap1.clone()));
             }
 
@@ -505,7 +517,7 @@ public class MainActivity extends Activity {
                 DatagramPacket frmpacket = new DatagramPacket(packetContent, packetContent.length, serverAddr, portNum);
                 senderudpsocket.send(frmpacket);
             } catch (IOException e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
 
             return null;
@@ -513,11 +525,16 @@ public class MainActivity extends Activity {
     }
 
     private class resReceivingTask extends AsyncTask<Void, Void, Void> {
+        private int frmID;
         private byte[] res = new byte[400];
         private float[] floatres = new float[8];
         private byte[] tmp = new byte[4];
-        private byte[] name = new byte[14];
+        private byte[] name = new byte[64];
         private int newMarkerNum;
+
+        public resReceivingTask(int frmID) {
+            this.frmID = frmID;
+        }
 
         protected Void doInBackground(Void... arg) {
             try {
@@ -531,24 +548,24 @@ public class MainActivity extends Activity {
             resID = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
             System.arraycopy(res, 4, tmp, 0, 4);
             newMarkerNum = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
-            //Log.d(TAG, "res id: " + resID + ", new marker num: " + newMarkerNum);
+            Log.d(TAG, "res id: " + resID + ", new marker num: " + newMarkerNum);
 
-            if(resID != 0) {
+            if(resID != 0 && resID <= frmID) {
                 Markers0 = new Markers(newMarkerNum);
 
                 for (int i = 0; i < newMarkerNum; i++) {
                     Markers0.Recs[i] = new Mat(4, 1, CvType.CV_32FC2);
-                    System.arraycopy(res, 8 + i * 50, tmp, 0, 4);
+                    System.arraycopy(res, 8 + i * 100, tmp, 0, 4);
                     Markers0.IDs[i] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
                     for (int j = 0; j < 8; j++) {
-                        System.arraycopy(res, 12 + i * 50 + j * 4, tmp, 0, 4);
+                        System.arraycopy(res, 12 + i * 100 + j * 4, tmp, 0, 4);
                         floatres[j] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getFloat();
                     }
                     for (int j = 0; j < 4; j++)
                         Markers0.Recs[i].put(j, 0, new float[]{floatres[j * 2], floatres[j * 2 + 1]});
 
-                    System.arraycopy(res, 44 + i * 50, name, 0, 14);
+                    System.arraycopy(res, 44 + i * 100, name, 0, 64);
                     String markerName = new String(name);
                     Markers0.Names[i] = markerName.substring(0, markerName.indexOf("."));
                 }
@@ -568,15 +585,16 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void initPreview(int width, int height)
-    {
+    private void initPreview(int width, int height) {
         Log.i(TAG, "initPreview() called");
         if ( mCamera != null && mPreviewHolder.getSurface() != null) {
             if ( !mCameraConfigured )
             {
                 Camera.Parameters params = mCamera.getParameters();
+                params.setPreviewSize(width, height);
                 size = params.getPreviewSize();
                 Log.i(TAG, "Preview size after initPreview: "+ size.width + ", " + size.height);
+
                 callbackBuffer = new byte[(size.height + size.height / 2)* size.width];
                 params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
                 params.set("camera-id", 2);
@@ -598,8 +616,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void startPreview()
-    {
+    private void startPreview() {
         if ( mCameraConfigured && mCamera != null )
         {
             mCamera.startPreview();
@@ -608,19 +625,17 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onResume()
-    {
+    public void onResume() {
         Log.i(TAG, " onResume() called.");
         super.onResume();
-        OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_11, this, mLoaderCallback);
+        //OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_11, this, mLoaderCallback);
         mCamera = Camera.open();
         mCamera.setDisplayOrientation(90);
         startPreview();
     }
 
     @Override
-    public void onPause()
-    {
+    public void onPause() {
         Log.i(TAG, " onPause() called.");
         if ( mInPreview )
             mCamera.stopPreview();
@@ -635,8 +650,7 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onStop()
-    {
+    public void onStop() {
         Log.i(TAG, " onStop() called.");
         super.onStop();
     }
@@ -647,19 +661,6 @@ public class MainActivity extends Activity {
         receiverudpsocket.close();
         senderTskQueue.clear();
         Log.i(TAG, " onDestroy() called.");
-        /*
-        if (socket != null) try {
-            oStream.close();
-            iStream.close();
-            socket.close();
-            iStream = null;
-            oStream = null;
-            socket = null;
-            senderTskQueue.clear();
-            receiverTskQueue.clear();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }*/
         super.onDestroy();
     }
 
@@ -667,7 +668,6 @@ public class MainActivity extends Activity {
      * Inner class for drawing
      */
     class DrawOnTop extends View {
-
         Paint paintFace;
         Paint paintPoster;
         Paint paintWord;
@@ -693,12 +693,23 @@ public class MainActivity extends Activity {
             paintWord.setTextSize(50);
         }
 
-
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            canvas.translate(1440, 0);
+            if(dispscale == scale)
+                canvas.translate(1080, 0);
+            else
+                canvas.translate(1440, 0);
             canvas.rotate(90);
+
+            if(ShowFPS) {
+                time_n = (int) System.currentTimeMillis();
+                if (frmID % 10 == 1) {
+                    fps = 10000 / (time_n - time_o);
+                    time_o = time_n;
+                }
+                canvas.drawText("fps: " + fps, 100, 50, paintWord);
+            }
 
             if (Markers1 != null && Markers1.Num != 0) {
                 float[][] points = new float[4][2];
@@ -710,13 +721,13 @@ public class MainActivity extends Activity {
                     canvas.drawText(Markers1.Names[i], dispscale*points[0][0]+400, dispscale*points[0][1]+200, paintWord);
                 }
             }
-            /*
-            if (Points1 != null) {
+
+            if (ShowPoints && Points1 != null) {
                 Point[] points = Points1.toArray();
                 for(int i = 0; i < points.length; i++) {
                     canvas.drawCircle(dispscale * (float)points[i].x, dispscale * (float)points[i].y, 5, paintFace);
                 }
-            }*/
+            }
         }
     }
 
