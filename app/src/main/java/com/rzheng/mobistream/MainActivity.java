@@ -11,6 +11,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Display;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -24,16 +25,42 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
+import org.opencv.core.MatOfDouble;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.MatOfPoint3f;
 import org.opencv.core.Point;
+import org.opencv.core.Point3;
 import org.opencv.core.TermCriteria;
 import org.opencv.features2d.FeatureDetector;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.video.Video;
+import org.rajawali3d.Object3D;
+import org.rajawali3d.animation.Animation;
+import org.rajawali3d.animation.EllipticalOrbitAnimation3D;
+import org.rajawali3d.animation.RotateAroundAnimation3D;
+import org.rajawali3d.debug.DebugCamera;
+import org.rajawali3d.debug.DebugLight;
+import org.rajawali3d.debug.DebugVisualizer;
+import org.rajawali3d.debug.GridFloor;
+import org.rajawali3d.lights.DirectionalLight;
+import org.rajawali3d.lights.PointLight;
+import org.rajawali3d.materials.Material;
+import org.rajawali3d.materials.methods.DiffuseMethod;
+import org.rajawali3d.materials.textures.ATexture;
+import org.rajawali3d.materials.textures.Texture;
+import org.rajawali3d.math.Matrix4;
+import org.rajawali3d.math.Quaternion;
+import org.rajawali3d.math.vector.Vector3;
+import org.rajawali3d.primitives.Cube;
+import org.rajawali3d.primitives.Plane;
+import org.rajawali3d.primitives.Sphere;
+import org.rajawali3d.renderer.ISurfaceRenderer;
+import org.rajawali3d.renderer.Renderer;
+import org.rajawali3d.view.ISurface;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -47,6 +74,9 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
+
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.opengles.GL10;
 
 public class MainActivity extends Activity {
 
@@ -92,8 +122,11 @@ public class MainActivity extends Activity {
     private boolean PosterChanged = false;
     private boolean PosterRecognized = false;
     private boolean ShowFPS = true;
+    private boolean ShowEdge = false;
+    private boolean ShowName = false;
     private boolean ShowPoints = false;
     private boolean EnableMultipleTracking = false;
+    private boolean EnableGL = true;
 
     private final int scale = 4;
     private final int IMAGE_TRACK = 1;
@@ -103,6 +136,20 @@ public class MainActivity extends Activity {
     private final int MAX_POINTS = 50;
     private final int FREQUENCY = 60;
     private float dispscale;
+
+    protected ISurface mRenderSurface;
+    protected ISurfaceRenderer mRenderer;
+
+    private Mat cameraMatrix = new Mat(3, 3, CvType.CV_64FC1);
+    private MatOfDouble distCoeffs = new MatOfDouble();
+    private MatOfPoint3f posterPoints = new MatOfPoint3f();
+    private Mat cvToGl = new Mat(4, 4, CvType.CV_64FC1);
+    private Mat viewMatrix = Mat.zeros(4, 4, CvType.CV_64FC1);
+    private double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
+    private double[] distCoeffsData = new double[]{2.8048006231906419e-001, -1.1828928706191699e+000, 0, 0, 1.4865861018485209e+000};
+    private Point3[] posterPointsData = new Point3[]{new Point3(-5, 7.4, 0), new Point3(5, 7.4, 0), new Point3(5, -7.4, 0), new Point3(-5, -7.4, 0)};
+    private double[][] cvToGlData = new double[][]{{1.0, 0, 0, 0}, {0, -1.0, 0, 0}, {0, 0, -1.0, 0}, {0, 0, 0, 1.0}};
+    private double[] glViewMatrixData = new double[16];
 
     static {
         System.loadLibrary("opencv_java");
@@ -119,17 +166,20 @@ public class MainActivity extends Activity {
         mPreview.setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
         mPreviewHolder = mPreview.getHolder();
         mPreviewHolder.addCallback(surfaceCallback);
+        mPreview.setZOrderMediaOverlay(false);
 
         Display disp = getWindowManager().getDefaultDisplay();
-        if (disp.getHeight() == 1920)
+        if (disp.getHeight() == 1080)
             dispscale = scale;
-        else
+        else if (disp.getHeight() == 1440)
             dispscale = (float) 1.33 * scale;
-        Log.d(TAG, "dispscale: " + dispscale);
 
         mDraw = new DrawOnTop(this);
-        addContentView(mDraw, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
+        addContentView(mDraw, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        mRenderSurface = (ISurface) findViewById(R.id.rajwali_surface);
+        mRenderer = new BasicRenderer(this);
+        mRenderSurface.setSurfaceRenderer(mRenderer);
 
         try {
             senderudpsocket = new DatagramSocket();
@@ -160,7 +210,6 @@ public class MainActivity extends Activity {
         super.onResume();
         //OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_11, this, mLoaderCallback);
         mCamera = Camera.open();
-        mCamera.setDisplayOrientation(90);
         startPreview();
     }
 
@@ -246,6 +295,14 @@ public class MainActivity extends Activity {
             termcrit = new TermCriteria(TermCriteria.MAX_ITER | TermCriteria.EPS, 20, 0.03);
             subPixWinSize = new org.opencv.core.Size(10, 10);
             winSize = new org.opencv.core.Size(31, 31);
+            for(int i = 0; i < 3; i++)
+                for(int j = 0; j < 3; j++)
+                    cameraMatrix.put(i, j, cameraMatrixData[i][j]);
+            distCoeffs.fromArray(distCoeffsData);
+            posterPoints.fromArray(posterPointsData);
+            for(int i = 0; i < 4; i++)
+                for(int j = 0; j < 4; j++)
+                    cvToGl.put(i, j, cvToGlData[i][j]);
             startPreview();
         }
 
@@ -325,9 +382,12 @@ public class MainActivity extends Activity {
         private int tskId;
         private HistoryTrackingPoints curHistory;
         private MatOfPoint2f Points2;
-        private Mat[] Recs2;
+        private MatOfPoint2f[] Recs2;
         private int[] bitmap2;
         private MatOfPoint2f[] subHistoryPoints, subPoints1, subPoints2;
+        private MatOfPoint2f scenePoints;
+        private Mat rvec, tvec;
+        private Mat rotation;
 
         public frmTrackingTask(int tskId) {
             this.tskId = tskId;
@@ -391,7 +451,6 @@ public class MainActivity extends Activity {
                             } while (curHistory.HistoryFrameID != resID);
 
                             if (curHistory.HistoryTrackingID == trackingID) {
-                                //Log.d(TAG, "History found for frame " + resID);
 
                                 for (i = k = j = 0; i < curHistory.HistoryPoints.rows(); i++) {
                                     while (curHistory.historybitmap[j] == 0) j++;
@@ -428,7 +487,7 @@ public class MainActivity extends Activity {
                                     }
                                 }
                             } else {
-
+                                Log.e(TAG, "tried to recover from late result, tracking points not match");
                             }
 
                             PosterRecognized = false;
@@ -457,13 +516,35 @@ public class MainActivity extends Activity {
                             }
                         }
 
-                        Recs2 = new Mat[Markers1.Num];
+                        Recs2 = new MatOfPoint2f[Markers1.Num];
                         for (int m = 0; m < Markers1.Num; m++) {
-                            Recs2[m] = new Mat(4, 1, CvType.CV_32FC2);
+                            Recs2[m] = new MatOfPoint2f();
                             Core.perspectiveTransform(Markers1.Recs[m], Recs2[m], Markers1.Homographys[m]);
                         }
 
                         Markers1.Recs = Recs2;
+
+                        if(EnableGL) {
+                            scenePoints = new MatOfPoint2f(Recs2[0].clone());
+                            rvec = new Mat();
+                            tvec = new Mat();
+                            Calib3d.solvePnP(posterPoints, scenePoints, cameraMatrix, distCoeffs, rvec, tvec);
+
+                            rotation = new Mat();
+                            Calib3d.Rodrigues(rvec, rotation);
+                            for (int row = 0; row < 3; row++) {
+                                for (int col = 0; col < 3; col++) {
+                                    viewMatrix.put(row, col, rotation.get(row, col));
+                                }
+                                viewMatrix.put(row, 3, tvec.get(row, 0));
+                            }
+                            viewMatrix.put(3, 3, 1.0);
+                            Core.gemm(cvToGl, viewMatrix, 1, new Mat(), 0, viewMatrix, 0);
+
+                            for (int col = 0; col < 4; col++)
+                                for (int row = 0; row < 4; row++)
+                                    glViewMatrixData[col * 4 + row] = viewMatrix.get(row, col)[0];
+                        }
                     }
 
                     Points1 = Points2;
@@ -597,6 +678,7 @@ public class MainActivity extends Activity {
     private class resReceivingTask extends AsyncTask<Void, Void, Void> {
         private byte[] res;
         private float[] floatres = new float[8];
+        private Point[] pointArray = new Point[4];
         private byte[] tmp = new byte[4];
         private byte[] name = new byte[64];
         private int newMarkerNum;
@@ -624,7 +706,8 @@ public class MainActivity extends Activity {
                     Markers0 = new Markers(newMarkerNum);
 
                     for (int i = 0; i < newMarkerNum; i++) {
-                        Markers0.Recs[i] = new Mat(4, 1, CvType.CV_32FC2);
+                        Markers0.Recs[i] = new MatOfPoint2f();
+                        Markers0.Recs[i].alloc(4);
                         System.arraycopy(res, 8 + i * 100, tmp, 0, 4);
                         Markers0.IDs[i] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
@@ -633,7 +716,9 @@ public class MainActivity extends Activity {
                             floatres[j] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getFloat();
                         }
                         for (int j = 0; j < 4; j++)
-                            Markers0.Recs[i].put(j, 0, new float[]{floatres[j * 2], floatres[j * 2 + 1]});
+                            pointArray[j] = new Point(floatres[j * 2], floatres[j * 2 + 1]);
+                        Markers0.Recs[i].fromArray(pointArray);
+
 
                         System.arraycopy(res, 44 + i * 100, name, 0, 64);
                         String markerName = new String(name);
@@ -682,11 +767,6 @@ public class MainActivity extends Activity {
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            if (dispscale == scale)
-                canvas.translate(1080, 0);
-            else
-                canvas.translate(1440, 0);
-            canvas.rotate(90);
 
             if (ShowFPS) {
                 time_n = (int) System.currentTimeMillis();
@@ -697,14 +777,15 @@ public class MainActivity extends Activity {
                 canvas.drawText("fps: " + fps, 100, 50, paintWord);
             }
 
-            if (Markers1 != null && Markers1.Num != 0) {
+            if (ShowEdge && Markers1 != null && Markers1.Num != 0) {
                 float[][] points = new float[4][2];
                 for (int i = 0; i < Markers1.Num; i++) {
                     for (int j = 0; j < 4; j++)
                         Markers1.Recs[i].get(j, 0, points[j]);
                     for (int j = 0; j < 4; j++)
                         canvas.drawLine(dispscale * points[j][0], dispscale * points[j][1], dispscale * points[(j + 1) % 4][0], dispscale * points[(j + 1) % 4][1], paintPoster);
-                    canvas.drawText(Markers1.Names[i], dispscale * points[0][0] + 400, dispscale * points[0][1] + 200, paintWord);
+                    if(ShowName)
+                        canvas.drawText(Markers1.Names[i], dispscale * points[0][0] + 400, dispscale * points[0][1] + 200, paintWord);
                 }
             }
 
@@ -714,6 +795,121 @@ public class MainActivity extends Activity {
                     canvas.drawCircle(dispscale * (float) points[i].x, dispscale * (float) points[i].y, 5, paintFace);
                 }
             }
+        }
+    }
+
+    class BasicRenderer extends Renderer {
+        private Matrix4 glViewMatrix;
+        private DirectionalLight mDirectionalLight;
+        private Cube mCube, mCube1, mCube2, mCube3;
+        private double[] projectionMatrix = new double[16];
+        private Plane mPlane;
+
+        public BasicRenderer(Context context) {
+            super(context);
+        }
+
+        @Override
+        protected void initScene() {
+            mCube = new Cube(4);
+            mCube.setPosition(0,0,2);
+            Material cubeMaterial = new Material();
+            cubeMaterial.enableLighting(true);
+            cubeMaterial.setColor(Color.RED);
+            cubeMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
+            mCube.setMaterial(cubeMaterial);
+            getCurrentScene().addChild(mCube);
+
+            mPlane = new Plane((float)10.5, (float)15.3, 1, 1, Vector3.Axis.Z);
+            mPlane.setPosition(0, 0, 0);
+            Material planeMaterial = new Material();
+            planeMaterial.enableLighting(true);
+            planeMaterial.setColor(Color.GRAY);
+            planeMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
+            mPlane.setMaterial(planeMaterial);
+            getCurrentScene().addChild(mPlane);
+
+            mDirectionalLight = new DirectionalLight();
+            mDirectionalLight.setLookAt(1, -1, -1);
+            mDirectionalLight.enableLookAt();
+            mDirectionalLight.setPosition(-4, 10, 4);
+            mDirectionalLight.setPower(2);
+            getCurrentScene().addLight(mDirectionalLight);
+
+            calcProjectionMatrix();
+            getCurrentCamera().setProjectionMatrix(new Matrix4(projectionMatrix));
+        }
+
+        private void calcProjectionMatrix() {
+            double fx = cameraMatrixData[0][0];
+            double fy = cameraMatrixData[1][1];
+            double cx = cameraMatrixData[0][2];
+            double cy = cameraMatrixData[1][2];
+            int width = 1920 / scale;
+            int height = 1080 / scale;
+            int far = 1000;
+            int near = 2;
+
+            projectionMatrix[0] = 2 * fx / width;
+            projectionMatrix[1] = 0;
+            projectionMatrix[2] = 0;
+            projectionMatrix[3] = 0;
+
+            projectionMatrix[4] = 0;
+            projectionMatrix[5] = 2 * fy / height;
+            projectionMatrix[6] = 0;
+            projectionMatrix[7] = 0;
+
+            projectionMatrix[8] = 1.0 - 2 * cx / width;
+            projectionMatrix[9] = 2 * cy / height - 1.0;
+            projectionMatrix[10] = -(far + near) / (far - near);
+            projectionMatrix[11] = -1.0;
+
+            projectionMatrix[12] = 0;
+            projectionMatrix[13] = 0;
+            projectionMatrix[14] = -2.0 * far * near / (far - near);
+            projectionMatrix[15] = 0;
+        }
+
+        private Object3D createAnimatedSphere() {
+            Object3D sphere = new Sphere(0.1f, 16, 12);
+            Material sphereMaterial = new Material();
+            sphereMaterial.enableLighting(true);
+            sphereMaterial.setColor(Color.GREEN);
+            sphereMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
+            sphere.setMaterial(sphereMaterial);
+            getCurrentScene().addChild(sphere);
+
+            RotateAroundAnimation3D a = new RotateAroundAnimation3D(new Vector3(0, 0, 0), Vector3.Axis.Z, 1);
+            a.setDurationMilliseconds(6000);
+            a.setRepeatMode(Animation.RepeatMode.INFINITE);
+            a.setTransformable3D(sphere);
+            getCurrentScene().registerAnimation(a);
+            a.play();
+
+            return sphere;
+        }
+
+        @Override
+        public void onRender(final long elapsedTime, final double deltaTime) {
+            glViewMatrix = new Matrix4(glViewMatrixData);
+            getCurrentCamera().setPosition(glViewMatrix.getTranslation().inverse());
+            mPlane.setRotation(glViewMatrix.inverse());
+            mCube.setRotation(glViewMatrix);
+            super.onRender(elapsedTime, deltaTime);
+        }
+
+        @Override
+        public void onRenderSurfaceCreated(EGLConfig config, GL10 gl, int width, int height) {
+            super.onRenderSurfaceCreated(config, gl, width, height);
+        }
+
+        @Override
+        public void onOffsetsChanged(float xOffset, float yOffset, float xOffsetStep, float yOffsetStep, int xPixelOffset, int yPixelOffset) {
+        }
+
+        @Override
+        public void onTouchEvent(MotionEvent event) {
         }
     }
 

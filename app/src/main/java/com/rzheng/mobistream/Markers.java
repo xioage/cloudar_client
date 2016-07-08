@@ -1,6 +1,7 @@
 package com.rzheng.mobistream;
 
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint2f;
 
 /**
  * Created by wzhangal on 4/14/2016.
@@ -9,7 +10,7 @@ public class Markers {
     public int Num;
     public int[] IDs;
     public String[] Names;
-    public Mat[] Recs;
+    public MatOfPoint2f[] Recs;
     public Mat[] Homographys;
     public int[] TrackingPointsNums;
 
@@ -17,7 +18,7 @@ public class Markers {
         this.Num = Num;
         this.IDs = new int[Num];
         this.Names = new String[Num];
-        this.Recs = new Mat[Num];
+        this.Recs = new MatOfPoint2f[Num];
         this.Homographys = new Mat[Num];
         this.TrackingPointsNums = new int[Num];
     }
