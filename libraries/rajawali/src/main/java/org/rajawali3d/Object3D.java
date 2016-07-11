@@ -15,6 +15,7 @@ package org.rajawali3d;
 import android.graphics.Color;
 import android.opengl.GLES20;
 
+import android.support.annotation.NonNull;
 import org.rajawali3d.bounds.BoundingBox;
 import org.rajawali3d.bounds.IBoundingVolume;
 import org.rajawali3d.cameras.Camera;
@@ -561,7 +562,7 @@ public class Object3D extends ATransformable3D implements Comparable<Object3D>, 
 		return mParent;
 	}
 
-	private void setParent(Object3D parent) {
+	private void setParent(@NonNull Object3D parent) {
 		mParent = parent;
 	}
 
