@@ -8,6 +8,7 @@ import android.graphics.Paint;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.hardware.Camera.Size;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -166,7 +167,12 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         setContentView(R.layout.activity_main);
 
         mPreview = (SurfaceView) findViewById(R.id.preview);
-        mPreview.setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
+        mPreview.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         mPreviewHolder = mPreview.getHolder();
         mPreviewHolder.addCallback(surfaceCallback);
         mPreview.setZOrderMediaOverlay(false);
@@ -229,6 +235,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         mCamera.setPreviewCallbackWithBuffer(null);
         mMediaPlayer.stop();
+        mMediaPlayer.release();
 
         mCamera.release();
         new endTransmissionTask().execute();
@@ -831,7 +838,11 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         private Material planeMaterial, buttonMaterial, trailerMaterial;
         private StreamingTexture mVideoTexture;
         private ObjectColorPicker mPicker;
+        private String url = "rtsp://r3---sn-a5mlrn7z.googlevideo.com/Cj0LENy73wIaNAmbcM1-dQ4L3BMYDSANFC1GWINXMOCoAUIASARgsfKvgpK37N1VigELbzZvTGdJZTNQWVEM/824954E4363243DE10C4E9BA586A5726C9F7FA52.44183CA7CEE3269200216C160CD19953ABFACBA7/yt6/1/video.3gp";
+
         private boolean playVideo = false;
+        private boolean waitingContent = true;
+        private boolean onlineVideo = false;
 
         public BasicRenderer(Context context) {
             super(context);
@@ -846,6 +857,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             planeMaterial.setColor(Color.WHITE);
             planeMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
             mPlane.setMaterial(planeMaterial);
+            mPlane.setVisible(false);
             getCurrentScene().addChild(mPlane);
 
             mButton = new Plane(6, 4, 1, 1, Vector3.Axis.Z);
@@ -863,8 +875,17 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
             mTrailer = new Plane(16, 9, 1, 1, Vector3.Axis.Z);
             mTrailer.setPosition(0, 0, 0.1);
-            mMediaPlayer = MediaPlayer.create(getContext(), R.raw.london);
-            mMediaPlayer.setLooping(true);
+            if(onlineVideo) {
+                mMediaPlayer = new MediaPlayer();
+                mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+                try {
+                    mMediaPlayer.setDataSource(url);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } else
+                mMediaPlayer = MediaPlayer.create(getContext(), R.raw.london);
+            mMediaPlayer.setLooping(false);
             mVideoTexture = new StreamingTexture("londonTrailer", mMediaPlayer);
             trailerMaterial = new Material();
             trailerMaterial.setColorInfluence(0);
@@ -927,6 +948,10 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         @Override
         public void onRender(final long elapsedTime, final double deltaTime) {
             super.onRender(elapsedTime, deltaTime);
+            if(waitingContent && PosterRecognized) {
+                waitingContent = false;
+                mPlane.setVisible(true);
+            }
             glViewMatrix = new Matrix4(glViewMatrixData);
             getCurrentCamera().setPosition(glViewMatrix.getTranslation().inverse());
             mPlane.setRotation(glViewMatrix.inverse());
@@ -950,14 +975,21 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             mPicker.getObjectAt(x, y);
         }
 
-        public void onObjectPicked(@NonNull Object3D object) {
+        public void onObjectPicked(Object3D object) {
             if(object == mButton) {
                 mButton.setVisible(false);
                 mTrailer.setVisible(true);
+                if(onlineVideo) {
+                    try {
+                        mMediaPlayer.prepare();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
                 mMediaPlayer.start();
                 playVideo = true;
             } else if(object == mTrailer) {
-                mMediaPlayer.stop();
+                mMediaPlayer.pause();
                 mTrailer.setVisible(false);
                 mButton.setVisible(true);
                 playVideo = false;
