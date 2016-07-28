@@ -5,18 +5,13 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.hardware.Camera.Size;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
-import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -43,29 +38,7 @@ import org.opencv.features2d.FeatureDetector;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.video.Video;
-import org.rajawali3d.Object3D;
-import org.rajawali3d.animation.mesh.SkeletalAnimationObject3D;
-import org.rajawali3d.animation.mesh.SkeletalAnimationSequence;
-import org.rajawali3d.lights.DirectionalLight;
-import org.rajawali3d.loader.LoaderAWD;
-import org.rajawali3d.loader.ParsingException;
-import org.rajawali3d.loader.md5.LoaderMD5Anim;
-import org.rajawali3d.loader.md5.LoaderMD5Mesh;
-import org.rajawali3d.materials.Material;
-import org.rajawali3d.materials.methods.DiffuseMethod;
-import org.rajawali3d.materials.textures.ATexture;
-import org.rajawali3d.materials.textures.StreamingTexture;
-import org.rajawali3d.materials.textures.Texture;
-import org.rajawali3d.math.Matrix4;
-import org.rajawali3d.math.vector.Vector3;
-import org.rajawali3d.primitives.Cube;
-import org.rajawali3d.primitives.Plane;
-import org.rajawali3d.primitives.Sphere;
 import org.rajawali3d.renderer.ISurfaceRenderer;
-import org.rajawali3d.renderer.Renderer;
-import org.rajawali3d.util.ObjectColorPicker;
-import org.rajawali3d.util.OnObjectPickedListener;
-import org.rajawali3d.util.RajLog;
 import org.rajawali3d.view.ISurface;
 
 import java.io.IOException;
@@ -81,8 +54,6 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
 
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
 
 public class MainActivity extends Activity implements View.OnTouchListener{
 
@@ -142,7 +113,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
     protected ISurface mRenderSurface;
     protected ISurfaceRenderer mRenderer;
-    private MediaPlayer mMediaPlayer;
 
     private Mat cameraMatrix = new Mat(3, 3, CvType.CV_64FC1);
     private MatOfDouble distCoeffs = new MatOfDouble();
@@ -190,7 +160,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         if(ShowGL) {
             mRenderSurface = (ISurface) findViewById(R.id.rajwali_surface);
-            mRenderer = new BasicRenderer(this);
+            mRenderer = new PosterRenderer(this, scale);
             mRenderSurface.setSurfaceRenderer(mRenderer);
             ((View) mRenderSurface).setOnTouchListener(this);
         }
@@ -230,13 +200,12 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     @Override
     public void onPause() {
         Log.i(TAG, " onPause() called.");
+        ((PosterRenderer) mRenderer).onActivityPause();
+
         if (mInPreview)
             mCamera.stopPreview();
 
         mCamera.setPreviewCallbackWithBuffer(null);
-        mMediaPlayer.stop();
-        mMediaPlayer.release();
-
         mCamera.release();
         new endTransmissionTask().execute();
         mCamera = null;
@@ -267,7 +236,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     public boolean onTouch(View v, MotionEvent event) {
         Log.d(TAG, "touch event");
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            ((BasicRenderer) mRenderer).getObjectAt(event.getX(), event.getY());
+            ((PosterRenderer) mRenderer).getObjectAt(event.getX(), event.getY());
         }
 
         return this.onTouchEvent(event);
@@ -572,6 +541,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                             for (int col = 0; col < 4; col++)
                                 for (int row = 0; row < 4; row++)
                                     glViewMatrixData[col * 4 + row] = viewMatrix.get(row, col)[0];
+
+                            ((PosterRenderer) mRenderer).setGlViewMatrix(glViewMatrixData);
                         }
                     }
 
@@ -747,7 +718,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                             pointArray[j] = new Point(floatres[j * 2], floatres[j * 2 + 1]);
                         Markers0.Recs[i].fromArray(pointArray);
 
-
                         System.arraycopy(res, 44 + i * 100, name, 0, 64);
                         String markerName = new String(name);
                         Markers0.Names[i] = markerName.substring(0, markerName.indexOf("."));
@@ -763,6 +733,9 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
                     InitializeNeeded = PosterChanged;
                     PosterRecognized = true;
+
+                    if(ShowGL && PosterChanged)
+                        ((PosterRenderer) mRenderer).onPosterChanged(Markers0);
                 } else {
                     Log.d(TAG, "discard outdate result");
                 }
@@ -827,178 +800,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                     canvas.drawCircle(dispscale * (float) points[i].x, dispscale * (float) points[i].y, 5, paintFace);
                 }
             }
-        }
-    }
-
-    class BasicRenderer extends Renderer implements OnObjectPickedListener{
-        private Matrix4 glViewMatrix;
-        private DirectionalLight mDirectionalLight;
-        private double[] projectionMatrix = new double[16];
-        private Plane mPlane, mButton, mTrailer;
-        private Material planeMaterial, buttonMaterial, trailerMaterial;
-        private StreamingTexture mVideoTexture;
-        private ObjectColorPicker mPicker;
-        private String url = "rtsp://r3---sn-a5mlrn7z.googlevideo.com/Cj0LENy73wIaNAmbcM1-dQ4L3BMYDSANFC1GWINXMOCoAUIASARgsfKvgpK37N1VigELbzZvTGdJZTNQWVEM/824954E4363243DE10C4E9BA586A5726C9F7FA52.44183CA7CEE3269200216C160CD19953ABFACBA7/yt6/1/video.3gp";
-
-        private boolean playVideo = false;
-        private boolean waitingContent = true;
-        private boolean onlineVideo = false;
-
-        public BasicRenderer(Context context) {
-            super(context);
-        }
-
-        @Override
-        protected void initScene() {
-            mPlane = new Plane(1, 1, 1, 1, Vector3.Axis.Z);
-            mPlane.setPosition(0, 0, 0);
-            planeMaterial = new Material();
-            planeMaterial.enableLighting(true);
-            planeMaterial.setColor(Color.WHITE);
-            planeMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
-            mPlane.setMaterial(planeMaterial);
-            mPlane.setVisible(false);
-            getCurrentScene().addChild(mPlane);
-
-            mButton = new Plane(6, 4, 1, 1, Vector3.Axis.Z);
-            mButton.setPosition(0, 0, 0.2);
-            buttonMaterial = new Material();
-            try {
-                buttonMaterial.addTexture(new Texture("youtube_button",
-                        R.drawable.youtube_play_button));
-            } catch (ATexture.TextureException e) {
-                e.printStackTrace();
-            }
-            buttonMaterial.setColorInfluence(0);
-            mButton.setMaterial(buttonMaterial);
-            mPlane.addChild(mButton);
-
-            mTrailer = new Plane(16, 9, 1, 1, Vector3.Axis.Z);
-            mTrailer.setPosition(0, 0, 0.1);
-            if(onlineVideo) {
-                mMediaPlayer = new MediaPlayer();
-                mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                try {
-                    mMediaPlayer.setDataSource(url);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            } else
-                mMediaPlayer = MediaPlayer.create(getContext(), R.raw.london);
-            mMediaPlayer.setLooping(false);
-            mVideoTexture = new StreamingTexture("londonTrailer", mMediaPlayer);
-            trailerMaterial = new Material();
-            trailerMaterial.setColorInfluence(0);
-            trailerMaterial.enableLighting(true);
-            try {
-                trailerMaterial.addTexture(mVideoTexture);
-            } catch (ATexture.TextureException e) {
-                e.printStackTrace();
-            }
-            mTrailer.setMaterial(trailerMaterial);
-            mTrailer.setVisible(false);
-            mPlane.addChild(mTrailer);
-
-            mDirectionalLight = new DirectionalLight();
-            mDirectionalLight.enableLookAt();
-            mDirectionalLight.setPosition(4, 4, 4);
-            mDirectionalLight.setPower(2);
-            getCurrentScene().addLight(mDirectionalLight);
-
-            mPicker = new ObjectColorPicker(this);
-            mPicker.setOnObjectPickedListener(this);
-            mPicker.registerObject(mButton);
-            mPicker.registerObject(mTrailer);
-
-            calcProjectionMatrix();
-            getCurrentCamera().setProjectionMatrix(new Matrix4(projectionMatrix));
-        }
-
-        private void calcProjectionMatrix() {
-            double fx = cameraMatrixData[0][0];
-            double fy = cameraMatrixData[1][1];
-            double cx = cameraMatrixData[0][2];
-            double cy = cameraMatrixData[1][2];
-            int width = 1920 / scale;
-            int height = 1080 / scale;
-            int far = 1000;
-            int near = 2;
-
-            projectionMatrix[0] = 2 * fx / width;
-            projectionMatrix[1] = 0;
-            projectionMatrix[2] = 0;
-            projectionMatrix[3] = 0;
-
-            projectionMatrix[4] = 0;
-            projectionMatrix[5] = 2 * fy / height;
-            projectionMatrix[6] = 0;
-            projectionMatrix[7] = 0;
-
-            projectionMatrix[8] = 1.0 - 2 * cx / width;
-            projectionMatrix[9] = 2 * cy / height - 1.0;
-            projectionMatrix[10] = -(far + near) / (far - near);
-            projectionMatrix[11] = -1.0;
-
-            projectionMatrix[12] = 0;
-            projectionMatrix[13] = 0;
-            projectionMatrix[14] = -2.0 * far * near / (far - near);
-            projectionMatrix[15] = 0;
-        }
-
-        @Override
-        public void onRender(final long elapsedTime, final double deltaTime) {
-            super.onRender(elapsedTime, deltaTime);
-            if(waitingContent && PosterRecognized) {
-                waitingContent = false;
-                mPlane.setVisible(true);
-            }
-            glViewMatrix = new Matrix4(glViewMatrixData);
-            getCurrentCamera().setPosition(glViewMatrix.getTranslation().inverse());
-            mPlane.setRotation(glViewMatrix.inverse());
-            if(playVideo) mVideoTexture.update();
-        }
-
-        @Override
-        public void onRenderSurfaceCreated(EGLConfig config, GL10 gl, int width, int height) {
-            super.onRenderSurfaceCreated(config, gl, width, height);
-        }
-
-        @Override
-        public void onOffsetsChanged(float xOffset, float yOffset, float xOffsetStep, float yOffsetStep, int xPixelOffset, int yPixelOffset) {
-        }
-
-        @Override
-        public void onTouchEvent(MotionEvent event) {
-        }
-
-        public void getObjectAt(float x, float y) {
-            mPicker.getObjectAt(x, y);
-        }
-
-        public void onObjectPicked(Object3D object) {
-            if(object == mButton) {
-                mButton.setVisible(false);
-                mTrailer.setVisible(true);
-                if(onlineVideo) {
-                    try {
-                        mMediaPlayer.prepare();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-                mMediaPlayer.start();
-                playVideo = true;
-            } else if(object == mTrailer) {
-                mMediaPlayer.pause();
-                mTrailer.setVisible(false);
-                mButton.setVisible(true);
-                playVideo = false;
-            }
-        }
-
-        @Override
-        public void onNoObjectPicked() {
-            RajLog.w("No object picked!");
         }
     }
 
