@@ -46,6 +46,8 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.UnknownHostException;
 import java.nio.channels.DatagramChannel;
 import java.nio.ByteBuffer;
@@ -62,18 +64,17 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private Camera mCamera;
     private boolean mInPreview = false;
     private boolean mCameraConfigured = false;
-    private Size size;
     private DrawOnTop mDraw;
     private static final String TAG = "Poster";
+    private static final String Eval = "Evaluation";
     private byte[] callbackBuffer;
     private Queue<Integer> senderTskQueue = new LinkedList<Integer>();
     private int time_o, time_n, fps;
 
-    private DatagramSocket senderudpsocket;
-    private DatagramChannel receiverchannel;
-    private InetAddress serverAddr;
-    private int portNum;
-    private String ip = "10.89.88.173";
+    private SocketAddress serverAddress;
+    private DatagramChannel dataChannel;
+    private int portNum = 51717;
+    private String ip = "10.89.95.132";
     ByteBuffer resPacket = ByteBuffer.allocate(400);
 
     private Mat YUVMatTrack, YUVMatTrans, YUVMatScaled;
@@ -98,7 +99,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean InitializeNeeded = true;
     private boolean PosterChanged = false;
     private boolean PosterRecognized = false;
-    private boolean Show2DView = false;
+    private boolean Show2DView = true;
     private boolean ShowGL = true;
     private boolean EnableMultipleTracking = false;
 
@@ -107,9 +108,11 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private final int IMAGE_DETECT = 2;
     private final int TRACKPOINTS = 3;
     private final int FEATURES = 4;
-    private final int MAX_POINTS = 50;
+    private final int MAX_POINTS = 90;
     private final int FREQUENCY = 60;
-    private float dispscale;
+    private final int previewWidth = 1920;
+    private final int previewHeight = 1080;
+    private float dispScale;
 
     protected ISurface mRenderSurface;
     protected ISurfaceRenderer mRenderer;
@@ -121,9 +124,13 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private Mat viewMatrix = Mat.zeros(4, 4, CvType.CV_64FC1);
     private double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
     private double[] distCoeffsData = new double[]{2.8048006231906419e-001, -1.1828928706191699e+000, 0, 0, 1.4865861018485209e+000};
-    private Point3[] posterPointsData = new Point3[]{new Point3(-5, 7.4, 0), new Point3(5, 7.4, 0), new Point3(5, -7.4, 0), new Point3(-5, -7.4, 0)};
+    private Point3[][] posterPointsData = new Point3[][]{{new Point3(-5, 7.4, 0), new Point3(5, 7.4, 0), new Point3(5, -7.4, 0), new Point3(-5, -7.4, 0)},
+            {new Point3(-5, 7.2, 0), new Point3(5, 7.2, 0), new Point3(5, -7.2, 0), new Point3(-5, -7.2, 0)},
+            {new Point3(5, 5, 0), new Point3(15, 5, 0), new Point3(15, -5, 0), new Point3(5, -5, 0)},
+            {new Point3(5, 8, 0), new Point3(15, 8, 0), new Point3(15, -8, 0), new Point3(5, -8, 0)},
+            {new Point3(5, 6.6, 0), new Point3(15, 6.6, 0), new Point3(15, -6.6, 0), new Point3(5, -6.6, 0)}};
     private double[][] cvToGlData = new double[][]{{1.0, 0, 0, 0}, {0, -1.0, 0, 0}, {0, 0, -1.0, 0}, {0, 0, 0, 1.0}};
-    private double[] glViewMatrixData = new double[16];
+    private double[] glViewMatrixData;
 
     static {
         System.loadLibrary("opencv_java");
@@ -149,9 +156,9 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         Display disp = getWindowManager().getDefaultDisplay();
         if (disp.getHeight() == 1080)
-            dispscale = scale;
+            dispScale = scale;
         else if (disp.getHeight() == 1440)
-            dispscale = (float) 1.33 * scale;
+            dispScale = (float) 1.33 * scale;
 
         if(Show2DView) {
             mDraw = new DrawOnTop(this);
@@ -166,48 +173,64 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         }
 
         try {
-            senderudpsocket = new DatagramSocket();
-            receiverchannel = DatagramChannel.open();
-            receiverchannel.socket().bind(new InetSocketAddress(51718));
-            receiverchannel.configureBlocking(false);
+            serverAddress = new InetSocketAddress(ip, portNum);
+            dataChannel = DatagramChannel.open();
+            dataChannel.configureBlocking(false);
+            dataChannel.socket().connect(serverAddress);
+
         } catch (Exception e) {
             e.printStackTrace();
         }
-        try {
-            serverAddr = InetAddress.getByName(ip);
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        }
-        portNum = 51717;
-        new startTransmissionTask().execute();
         for (int i = 1; i <= 1; i++) senderTskQueue.add(i);
+
+        YUVMatTrack = new Mat(previewHeight + previewHeight / 2, previewWidth, CvType.CV_8UC1);
+        YUVMatTrans = new Mat(previewHeight + previewHeight / 2, previewWidth, CvType.CV_8UC1);
+        YUVMatScaled = new Mat((previewHeight + previewHeight / 2) / scale, previewWidth / scale, CvType.CV_8UC1);
+        BGRMat = new Mat(previewHeight, previewWidth, CvType.CV_8UC3);
+        BGRMatScaled = new Mat(previewHeight / scale, previewWidth / scale, CvType.CV_8UC3);
+        params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 50);
+        detector = FeatureDetector.create(FeatureDetector.SURF);
+        termcrit = new TermCriteria(TermCriteria.MAX_ITER | TermCriteria.EPS, 20, 0.03);
+        subPixWinSize = new org.opencv.core.Size(10, 10);
+        winSize = new org.opencv.core.Size(31, 31);
+        for(int i = 0; i < 3; i++)
+            for(int j = 0; j < 3; j++)
+                cameraMatrix.put(i, j, cameraMatrixData[i][j]);
+        distCoeffs.fromArray(distCoeffsData);
+        for(int i = 0; i < 4; i++)
+            for(int j = 0; j < 4; j++)
+                cvToGl.put(i, j, cvToGlData[i][j]);
     }
 
     @Override
     public void onStart() {
+        Log.i(TAG, " onStart() called.");
         super.onStart();
+
+        new startTransmissionTask().execute();
     }
 
     @Override
     public void onResume() {
         Log.i(TAG, " onResume() called.");
         super.onResume();
-        //OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_11, this, mLoaderCallback);
         mCamera = Camera.open();
-        startPreview();
+        glViewMatrixData = new double[16];
+        Markers0 = null;
+        Markers1 = null;
     }
 
     @Override
     public void onPause() {
         Log.i(TAG, " onPause() called.");
-        ((PosterRenderer) mRenderer).onActivityPause();
+        if(ShowGL)
+            ((PosterRenderer) mRenderer).onActivityPause();
 
         if (mInPreview)
             mCamera.stopPreview();
 
         mCamera.setPreviewCallbackWithBuffer(null);
         mCamera.release();
-        new endTransmissionTask().execute();
         mCamera = null;
         mInPreview = false;
         super.onPause();
@@ -217,13 +240,13 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     public void onStop() {
         Log.i(TAG, " onStop() called.");
         super.onStop();
+        new endTransmissionTask().execute();
     }
 
     @Override
     protected void onDestroy() {
-        senderudpsocket.close();
         try {
-            receiverchannel.close();
+            dataChannel.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -235,7 +258,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     @Override
     public boolean onTouch(View v, MotionEvent event) {
         Log.d(TAG, "touch event");
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+        if (ShowGL && event.getAction() == MotionEvent.ACTION_DOWN) {
             ((PosterRenderer) mRenderer).getObjectAt(event.getX(), event.getY());
         }
 
@@ -248,11 +271,9 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             if (!mCameraConfigured) {
                 Camera.Parameters params = mCamera.getParameters();
                 params.setPreviewSize(width, height);
-                size = params.getPreviewSize();
-                Log.i(TAG, "Preview size after initPreview: " + size.width + ", " + size.height);
 
-                callbackBuffer = new byte[(size.height + size.height / 2) * size.width];
-                params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+                callbackBuffer = new byte[(height + height / 2) * width];
+                params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
                 params.set("camera-id", 2);
                 mCamera.setParameters(params);
                 mCameraConfigured = true;
@@ -265,13 +286,13 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             } catch (Throwable t) {
                 Log.e(TAG, "Exception in initPreview()", t);
             }
-
         }
     }
 
     private void startPreview() {
         if (mCameraConfigured && mCamera != null) {
             mCamera.startPreview();
+            mCamera.autoFocus(null);
             mInPreview = true;
         }
     }
@@ -279,25 +300,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {
         public void surfaceCreated(SurfaceHolder holder) {
             Log.i(TAG, " surfaceCreated() called.");
-            initPreview(1920, 1080);
-            YUVMatTrack = new Mat(size.height + size.height / 2, size.width, CvType.CV_8UC1);
-            YUVMatTrans = new Mat(size.height + size.height / 2, size.width, CvType.CV_8UC1);
-            YUVMatScaled = new Mat((size.height + size.height / 2) / scale, size.width / scale, CvType.CV_8UC1);
-            BGRMat = new Mat(size.height, size.width, CvType.CV_8UC3);
-            BGRMatScaled = new Mat(size.height / scale, size.width / scale, CvType.CV_8UC3);
-            params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 50);
-            detector = FeatureDetector.create(FeatureDetector.SURF);
-            termcrit = new TermCriteria(TermCriteria.MAX_ITER | TermCriteria.EPS, 20, 0.03);
-            subPixWinSize = new org.opencv.core.Size(10, 10);
-            winSize = new org.opencv.core.Size(31, 31);
-            for(int i = 0; i < 3; i++)
-                for(int j = 0; j < 3; j++)
-                    cameraMatrix.put(i, j, cameraMatrixData[i][j]);
-            distCoeffs.fromArray(distCoeffsData);
-            posterPoints.fromArray(posterPointsData);
-            for(int i = 0; i < 4; i++)
-                for(int j = 0; j < 4; j++)
-                    cvToGl.put(i, j, cvToGlData[i][j]);
+            initPreview(previewWidth, previewHeight);
             startPreview();
         }
 
@@ -315,7 +318,11 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         @Override
         public void onPreviewFrame(byte[] data, Camera camera) {
             if (senderTskQueue.peek() != null) {
+                //Long tsLong = System.currentTimeMillis();
+                //String ts_getCameraFrame = tsLong.toString();
+                //Log.d(Eval, "get camera frame " + frmID + ": " + ts_getCameraFrame);
                 new frmTrackingTask(senderTskQueue.poll()).execute(data);
+
                 if (frmID % FREQUENCY == 5) {
                     lastSentID = frmID;
                     new frmTransmissionTask(lastSentID).execute(data);
@@ -328,15 +335,14 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     };
 
     private class startTransmissionTask extends AsyncTask<byte[], Void, Void> {
-        private byte[] frmid = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(0).array();
-
         @Override
         protected Void doInBackground(byte[]... frmdata) {
             try {
-                Log.d(TAG, "sending end signals");
+                Log.d(TAG, "sending start signals");
                 for (int i = 0; i < 3; i++) {
-                    DatagramPacket frmpacket = new DatagramPacket(frmid, 4, serverAddr, portNum);
-                    senderudpsocket.send(frmpacket);
+                    ByteBuffer buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(0);
+                    buffer.flip();
+                    dataChannel.send(buffer, serverAddress);
                 }
 
             } catch (IOException e) {
@@ -351,15 +357,14 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     }
 
     private class endTransmissionTask extends AsyncTask<byte[], Void, Void> {
-        private byte[] frmid = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(-1).array();
-
         @Override
         protected Void doInBackground(byte[]... frmdata) {
             try {
                 Log.d(TAG, "sending end signals");
-                for (int i = 0; i < 3; i++) {
-                    DatagramPacket frmpacket = new DatagramPacket(frmid, 4, serverAddr, portNum);
-                    senderudpsocket.send(frmpacket);
+                for (int i = 0; i < 1; i++) {
+                    ByteBuffer buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(-1);
+                    buffer.flip();
+                    dataChannel.send(buffer, serverAddress);
                 }
 
             } catch (IOException e) {
@@ -385,6 +390,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         private MatOfPoint2f scenePoints;
         private Mat rvec, tvec;
         private Mat rotation;
+        private boolean viewReady;
+        private Long tsLong;
 
         public frmTrackingTask(int tskId) {
             this.tskId = tskId;
@@ -394,8 +401,12 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         protected Void doInBackground(byte[]... frmdata) {
             YUVMatTrack.put(0, 0, frmdata[0]);
             Imgproc.resize(YUVMatTrack, YUVMatScaled, YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-            Mat GRAYMat = new Mat(size.height / scale, size.width / scale, CvType.CV_8UC1);
+            Mat GRAYMat = new Mat(previewHeight / scale, previewWidth / scale, CvType.CV_8UC1);
             Imgproc.cvtColor(YUVMatScaled, GRAYMat, Imgproc.COLOR_YUV2GRAY_420);
+
+            //tsLong = System.currentTimeMillis();
+            //String ts_resize = tsLong.toString();
+            //Log.d(Eval, "resize camera frame " + frmID + ": " + ts_resize);
 
             if (PosterRecognized) {
                 Markers1 = Markers0;
@@ -406,6 +417,10 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 MatOfFloat err = new MatOfFloat();
                 Points2 = new MatOfPoint2f();
                 Video.calcOpticalFlowPyrLK(PreGRAYMat, GRAYMat, Points1, Points2, status, err, winSize, 3, termcrit, 0, 0.001);
+
+                //tsLong = System.currentTimeMillis();
+                //String ts_getPoints = tsLong.toString();
+                //Log.d(Eval, "get points " + frmID);
 
                 bitmap2 = new int[MAX_POINTS];
                 int i, k, j;
@@ -486,8 +501,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                             } else {
                                 Log.e(TAG, "tried to recover from late result, tracking points not match");
                             }
-
-                            PosterRecognized = false;
                         } else {
                             if (EnableMultipleTracking) {
                                 subPoints1 = new MatOfPoint2f[Markers1.Num];
@@ -515,34 +528,68 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
                         Recs2 = new MatOfPoint2f[Markers1.Num];
                         for (int m = 0; m < Markers1.Num; m++) {
-                            Recs2[m] = new MatOfPoint2f();
-                            Core.perspectiveTransform(Markers1.Recs[m], Recs2[m], Markers1.Homographys[m]);
+                            if(Markers1.Recs[m] != null && Markers1.Homographys[m] != null) {
+                                Recs2[m] = new MatOfPoint2f();
+                                Core.perspectiveTransform(Markers1.Recs[m], Recs2[m], Markers1.Homographys[m]);
+                                viewReady = true;
+                            } else {
+                                Log.d(TAG, "null rec");
+                                viewReady = false;
+                            }
                         }
 
                         Markers1.Recs = Recs2;
 
-                        if(ShowGL) {
+                        if(ShowGL && viewReady) {
+                            posterPoints.fromArray(posterPointsData[Markers1.IDs[0]]);
                             scenePoints = new MatOfPoint2f(Recs2[0].clone());
-                            rvec = new Mat();
-                            tvec = new Mat();
-                            Calib3d.solvePnP(posterPoints, scenePoints, cameraMatrix, distCoeffs, rvec, tvec);
-
-                            rotation = new Mat();
-                            Calib3d.Rodrigues(rvec, rotation);
-                            for (int row = 0; row < 3; row++) {
-                                for (int col = 0; col < 3; col++) {
-                                    viewMatrix.put(row, col, rotation.get(row, col));
-                                }
-                                viewMatrix.put(row, 3, tvec.get(row, 0));
+                            float x, y;
+                            float[] xy = new float[2];
+                            x = y = 0;
+                            for(int ii = 0; ii < 4; ii++)
+                            {
+                                scenePoints.get(ii, 0, xy);
+                                x += xy[0];
+                                y += xy[1];
                             }
-                            viewMatrix.put(3, 3, 1.0);
-                            Core.gemm(cvToGl, viewMatrix, 1, new Mat(), 0, viewMatrix, 0);
+                            x /= 4;
+                            y /= 4;
+                            if(x < 0 || y < 0 || x > 1920/scale || y > 1080/scale) {
+                                Log.d(TAG, "marker out of view, lost tracking");
+                                ((PosterRenderer) mRenderer).onPosterChanged(null);
+                                InitializeNeeded = true;
+                            }
+                            else {
+                                rvec = new Mat();
+                                tvec = new Mat();
+                                Calib3d.solvePnP(posterPoints, scenePoints, cameraMatrix, distCoeffs, rvec, tvec);
 
-                            for (int col = 0; col < 4; col++)
-                                for (int row = 0; row < 4; row++)
-                                    glViewMatrixData[col * 4 + row] = viewMatrix.get(row, col)[0];
+                                rotation = new Mat();
+                                Calib3d.Rodrigues(rvec, rotation);
+                                for (int row = 0; row < 3; row++) {
+                                    for (int col = 0; col < 3; col++) {
+                                        viewMatrix.put(row, col, rotation.get(row, col));
+                                    }
+                                    viewMatrix.put(row, 3, tvec.get(row, 0));
+                                }
+                                viewMatrix.put(3, 3, 1.0);
+                                Core.gemm(cvToGl, viewMatrix, 1, new Mat(), 0, viewMatrix, 0);
 
-                            ((PosterRenderer) mRenderer).setGlViewMatrix(glViewMatrixData);
+                                for (int col = 0; col < 4; col++)
+                                    for (int row = 0; row < 4; row++)
+                                        glViewMatrixData[col * 4 + row] = viewMatrix.get(row, col)[0];
+
+                                ((PosterRenderer) mRenderer).setGlViewMatrix(glViewMatrixData);
+                                viewReady = false;
+
+                                //tsLong = System.currentTimeMillis();
+                                //String ts_showResult = tsLong.toString();
+                                //Log.d(Eval, "frm " + frmID + " showed");
+                            }
+
+                            if(PosterRecognized) {
+                                PosterRecognized = false;
+                            }
                         }
                     }
 
@@ -652,6 +699,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 System.arraycopy(bitmap1, 0, frmdataToSend, datasize - MAX_POINTS, MAX_POINTS);
             }
             //Log.d(TAG, "datasize: " + datasize);
+            //datasize = 1460;
             packetContent = new byte[12 + datasize];
 
             frmid = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(frmID).array();
@@ -663,9 +711,13 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             System.arraycopy(frmdataToSend, 0, packetContent, 12, datasize);
 
             try {
-                DatagramPacket frmpacket = new DatagramPacket(packetContent, packetContent.length, serverAddr, portNum);
-                senderudpsocket.send(frmpacket);
-                Log.d(TAG, "frame " + frmID + " sent");
+                ByteBuffer buffer = ByteBuffer.allocate(packetContent.length).put(packetContent);
+                buffer.flip();
+                dataChannel.send(buffer, serverAddress);
+
+                //Long tsLong = System.currentTimeMillis();
+                //String ts_sendCameraFrame = tsLong.toString();
+                Log.d(Eval, "frame " + frmID + " sent");
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -685,7 +737,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         protected Void doInBackground(Void... arg) {
             resPacket.clear();
             try {
-                if (receiverchannel.receive(resPacket) != null) {
+                if (dataChannel.receive(resPacket) != null) {
                     res = resPacket.array();
                 }
                 else
@@ -699,7 +751,9 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 resID = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
                 System.arraycopy(res, 4, tmp, 0, 4);
                 newMarkerNum = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
-                Log.d(TAG, "res id: " + resID + ", new marker num: " + newMarkerNum);
+                //Long tsLong = System.currentTimeMillis();
+                //String ts_getResult = tsLong.toString();
+                Log.d(Eval, "res " + resID + " received");
 
                 if (resID == lastSentID) {
                     Markers0 = new Markers(newMarkerNum);
@@ -745,8 +799,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     }
 
     class DrawOnTop extends View {
-        Paint paintFace;
-        Paint paintPoster;
+        Paint paintPoint;
+        Paint paintLine;
         Paint paintWord;
         private boolean ShowFPS = true;
         private boolean ShowEdge = false;
@@ -755,11 +809,15 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         public DrawOnTop(Context context) {
             super(context);
+            paintPoint = new Paint();
+            paintPoint.setStyle(Paint.Style.STROKE);
+            paintPoint.setStrokeWidth(2);
+            paintPoint.setColor(Color.YELLOW);
 
-            paintPoster = new Paint();
-            paintPoster.setStyle(Paint.Style.STROKE);
-            paintPoster.setStrokeWidth(10);
-            paintPoster.setColor(Color.GREEN);
+            paintLine = new Paint();
+            paintLine.setStyle(Paint.Style.STROKE);
+            paintLine.setStrokeWidth(10);
+            paintLine.setColor(Color.GREEN);
 
             paintWord = new Paint();
             paintWord.setStyle(Paint.Style.STROKE);
@@ -767,6 +825,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             paintWord.setColor(Color.RED);
             paintWord.setTextAlign(Paint.Align.CENTER);
             paintWord.setTextSize(50);
+
         }
 
         @Override
@@ -788,16 +847,16 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                     for (int j = 0; j < 4; j++)
                         Markers1.Recs[i].get(j, 0, points[j]);
                     for (int j = 0; j < 4; j++)
-                        canvas.drawLine(dispscale * points[j][0], dispscale * points[j][1], dispscale * points[(j + 1) % 4][0], dispscale * points[(j + 1) % 4][1], paintPoster);
+                        canvas.drawLine(dispScale * points[j][0], dispScale * points[j][1], dispScale * points[(j + 1) % 4][0], dispScale * points[(j + 1) % 4][1], paintLine);
                     if(ShowName)
-                        canvas.drawText(Markers1.Names[i], dispscale * points[0][0] + 400, dispscale * points[0][1] + 200, paintWord);
+                        canvas.drawText(Markers1.Names[i], dispScale * points[0][0] + 400, dispScale * points[0][1] + 200, paintWord);
                 }
             }
 
             if (ShowPoints && Points1 != null) {
                 Point[] points = Points1.toArray();
                 for (int i = 0; i < points.length; i++) {
-                    canvas.drawCircle(dispscale * (float) points[i].x, dispscale * (float) points[i].y, 5, paintFace);
+                    canvas.drawCircle(dispScale * (float) points[i].x, dispScale * (float) points[i].y, 5, paintPoint);
                 }
             }
         }

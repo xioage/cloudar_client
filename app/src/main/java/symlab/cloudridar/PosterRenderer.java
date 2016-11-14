@@ -1,21 +1,32 @@
 package symlab.cloudridar;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.net.Uri;
+import android.util.Log;
 import android.view.MotionEvent;
 
 import org.rajawali3d.Object3D;
 import org.rajawali3d.lights.DirectionalLight;
+import org.rajawali3d.lights.PointLight;
 import org.rajawali3d.materials.Material;
 import org.rajawali3d.materials.methods.DiffuseMethod;
 import org.rajawali3d.materials.textures.ATexture;
+import org.rajawali3d.materials.textures.AlphaMapTexture;
 import org.rajawali3d.materials.textures.StreamingTexture;
 import org.rajawali3d.materials.textures.Texture;
 import org.rajawali3d.math.Matrix4;
 import org.rajawali3d.math.vector.Vector3;
 import org.rajawali3d.primitives.Plane;
+import org.rajawali3d.primitives.Sphere;
 import org.rajawali3d.renderer.Renderer;
 import org.rajawali3d.util.ObjectColorPicker;
 import org.rajawali3d.util.OnObjectPickedListener;
@@ -35,11 +46,14 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     private double[] projectionMatrix = new double[16];
     private double[] glViewMatrixData = new double[16];
     private Trailer[] trailers = new Trailer[3];
+    private Cover[] covers = new Cover[3];
     private ObjectColorPicker mPicker;
     private double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
-    private String url = "rtsp://r3---sn-a5mlrn7z.googlevideo.com/Cj0LENy73wIaNAmbcM1-dQ4L3BMYDSANFC1GWINXMOCoAUIASARgsfKvgpK37N1VigELbzZvTGdJZTNQWVEM/824954E4363243DE10C4E9BA586A5726C9F7FA52.44183CA7CEE3269200216C160CD19953ABFACBA7/yt6/1/video.3gp";
+    private String url = "rtsp://";
+    private String TAG = "PosterRenderer";
 
     private boolean onlineVideo = false;
+    private boolean videoOn = false;
 
     public PosterRenderer(Context context, int scale) {
         super(context);
@@ -47,9 +61,35 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     }
 
     @Override
+
     protected void initScene() {
+        Log.d(TAG, "initScene called()");
+        PointLight light = new PointLight();
+        light.setPosition(10, 0, 3);
+        light.setLookAt(0, 0, -1);
+        light.setPower(1f);
+        getCurrentScene().addLight(light);
+
         mPicker = new ObjectColorPicker(this);
         mPicker.setOnObjectPickedListener(this);
+
+        trailers[0] = new Trailer();
+        trailers[0].hide();
+        trailers[0].setPosition(0, 0, 0);
+        getCurrentScene().addChild(trailers[0]);
+        for (int i = 1; i < 2; i++) {
+            trailers[i] = new Trailer();
+            trailers[i].hide();
+            trailers[i].setPosition(i * -16, 0, 0);
+            trailers[0].addChild(trailers[i]);
+        }
+
+        for(int i = 0; i < 3; i++) {
+            covers[i] = new Cover(i+3);
+            covers[i].setPosition(10, 0, 0);
+            covers[i].setVisible(false);
+            trailers[0].addChild(covers[i]);
+        }
 
         calcProjectionMatrix();
         getCurrentCamera().setProjectionMatrix(new Matrix4(projectionMatrix));
@@ -86,31 +126,40 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
         projectionMatrix[15] = 0;
     }
 
-    public void onPosterChanged(Markers markers) {
-        if(trailerNum == 2)
-            return;
-        if(trailers[0] != null) {
-            for (int i = 1; i < trailerNum; i++) {
-                trailers[0].removeChild(trailers[i]);
+    private void clear() {
+        if(trailerNum > 0) {
+            for (int i = 0; i < trailerNum; i++) {
                 trailers[i].onPause();
-                trailers[i].destroy();
+                trailers[i].hide();
             }
-            getCurrentScene().removeChild(trailers[0]);
-            trailers[0].onPause();
-            trailers[0].destroy();
         }
+        for (int i = 0; i < 3; i++) {
+            covers[i].hide();
+        }
+    }
 
-        if(markers.Num > 0) {
-            trailers[0] = new Trailer(markers.Names[0]);
-            trailers[0].setPosition(0, 0, 0);
-            getCurrentScene().addChild(trailers[0]);
+    public void onPosterChanged(Markers markers) {
+        clear();
 
-            trailerNum = 1;
-            for (int i = 1; i < 3 && i < markers.Num; i++) {
-                trailers[i] = new Trailer(markers.Names[i]);
-                trailers[i].setPosition(i * -16, 0, 0);
-                trailers[0].addChild(trailers[i]);
-                trailerNum++;
+        if(markers != null && markers.Num > 0) {
+            trailerNum = 0;
+            for (int i = 0; i < 2 && i < markers.Num; i++) {
+                int curID = markers.IDs[i];
+                switch(curID) {
+                    case 0:
+                    case 1:
+                        trailers[i].setTrailerContent(curID);
+                        trailers[i].show();
+                        trailerNum++;
+                        break;
+                    case 2:
+                    case 3:
+                    case 4:
+                        covers[curID-2].show();
+                        break;
+                    default:
+                        break;
+                }
             }
         }
     }
@@ -118,13 +167,13 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     @Override
     public void onRender(final long elapsedTime, final double deltaTime) {
         super.onRender(elapsedTime, deltaTime);
-        if(trailers[0] != null) {
-            Matrix4 glViewMatrix = new Matrix4(glViewMatrixData);
-            getCurrentCamera().setPosition(glViewMatrix.getTranslation().inverse());
-            trailers[0].setRotation(glViewMatrix.inverse());
-            for (int i = 0; i < trailerNum; i++)
-                trailers[i].updateTexture();
-        }
+        Matrix4 glViewMatrix = new Matrix4(glViewMatrixData);
+        getCurrentCamera().setPosition(glViewMatrix.getTranslation().inverse());
+        trailers[0].setRotation(glViewMatrix.inverse());
+        for (int i = 0; i < trailerNum; i++)
+            trailers[i].updateTexture();
+        for (int i = 0; i < 3; i++)
+            covers[i].onRender();
     }
 
     @Override
@@ -145,8 +194,24 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     }
 
     public void onObjectPicked(Object3D object) {
-        for(int i = 0; i < trailerNum; i++)
-            trailers[i].onTouch(object);
+        int status;
+        int pickedTrailer = -1;
+
+        for(int i = 0; i < trailerNum; i++) {
+            status = trailers[i].onTouch(object);
+            if (status > 0) {
+                pickedTrailer = i;
+            }
+        }
+        for(int i = 0; i < trailerNum; i++) {
+            if(pickedTrailer == -1)
+                trailers[i].show();
+            else if(pickedTrailer != i)
+                trailers[i].hide();
+        }
+
+        for(int i = 0; i < 3; i++)
+            covers[i].onTouch(object);
     }
 
     @Override
@@ -155,8 +220,7 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     }
 
     public void onActivityPause() {
-        for(int i = 0; i < trailerNum; i++)
-            trailers[i].onPause();
+        clear();
     }
 
     public void setGlViewMatrix(double[] glViewMatrixData) {
@@ -164,26 +228,26 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     }
 
     private class Trailer extends Plane {
-        private Plane mButton, mTrailer;
-        private Material baseMaterial, buttonMaterial, trailerMaterial;
+        private Plane mButton, mTrailer, mTrailerBoard, mLeftBoard, mRightBoard;
+        private Material baseMaterial, buttonMaterial, trailerMaterial, trailerBoardMaterial, boardMaterial;
         private MediaPlayer mMediaPlayer;
         private StreamingTexture mVideoTexture;
-        private boolean playVideo = false;
+        private int status = 0;
 
-        public Trailer(String movieName) {
+        public Trailer() {
             super(1, 1, 1, 1);
             baseMaterial = new Material();
             baseMaterial.enableLighting(false);
-            baseMaterial.setColor(Color.RED);
+            baseMaterial.setColor(Color.TRANSPARENT);
             baseMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
             this.setMaterial(baseMaterial);
 
-            mButton = new Plane(6, 4, 1, 1, Vector3.Axis.Z);
+            mButton = new Plane(8, 8, 1, 1, Vector3.Axis.Z);
             mButton.setPosition(0, 0, 0.2);
             buttonMaterial = new Material();
             try {
                 buttonMaterial.addTexture(new Texture("youtube_button",
-                        R.drawable.youtube_play_button));
+                        R.drawable.youtubebutton));
             } catch (ATexture.TextureException e) {
                 e.printStackTrace();
             }
@@ -191,8 +255,29 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
             mButton.setMaterial(buttonMaterial);
             this.addChild(mButton);
 
-            mTrailer = new Plane(16, 9, 1, 1, Vector3.Axis.Z);
+            mTrailer = new Plane((float)26.4, (float)15.2, 1, 1, Vector3.Axis.Z);
             mTrailer.setPosition(0, 0, 0.1);
+
+            boardMaterial = new Material();
+            boardMaterial.enableLighting(false);
+            boardMaterial.setColor(Color.TRANSPARENT);
+            boardMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
+            mLeftBoard = new Plane((float)8.2, (float)15.4, 1, 1, Vector3.Axis.Z);
+            mLeftBoard.setPosition(-9.3, 0, 0.2);
+            mLeftBoard.setMaterial(boardMaterial);
+            mLeftBoard.setVisible(false);
+            this.addChild(mLeftBoard);
+            mRightBoard = new Plane((float)8.2, (float)15.4, 1, 1, Vector3.Axis.Z);
+            mRightBoard.setPosition(9.3, 0, 0.2);
+            mRightBoard.setMaterial(boardMaterial);
+            mRightBoard.setVisible(false);
+            this.addChild(mRightBoard);
+
+            mPicker.registerObject(mButton);
+            mPicker.registerObject(mTrailer);
+        }
+
+        public void setTrailerContent(int movieID) {
             if (onlineVideo) {
                 mMediaPlayer = new MediaPlayer();
                 mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
@@ -202,10 +287,16 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
                     e.printStackTrace();
                 }
             } else {
-                if(movieName.contains("London"))
-                    mMediaPlayer = MediaPlayer.create(getContext(), R.raw.london);
-                else if(movieName.contains("Batman"))
-                    mMediaPlayer = MediaPlayer.create(getContext(), R.raw.batmanvsuperman);
+                switch(movieID) {
+                    case 0:
+                        mMediaPlayer = MediaPlayer.create(getContext(), R.raw.london);
+                        break;
+                    case 1:
+                        mMediaPlayer = MediaPlayer.create(getContext(), R.raw.batmanvsuperman);
+                        break;
+                    default:
+                        break;
+                }
             }
             mMediaPlayer.setLooping(false);
             mVideoTexture = new StreamingTexture("trailer", mMediaPlayer);
@@ -220,20 +311,19 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
             mTrailer.setMaterial(trailerMaterial);
             mTrailer.setVisible(false);
             this.addChild(mTrailer);
-
-            mPicker.registerObject(mButton);
-            mPicker.registerObject(mTrailer);
         }
 
         public void updateTexture() {
-            if(playVideo)
+            if(status > 0)
                 mVideoTexture.update();
         }
 
-        public void onTouch(Object3D object) {
+        public int onTouch(Object3D object) {
             if(object == mButton) {
                 mButton.setVisible(false);
                 mTrailer.setVisible(true);
+                mLeftBoard.setVisible(true);
+                mRightBoard.setVisible(true);
                 if(onlineVideo) {
                     try {
                         mMediaPlayer.prepare();
@@ -242,18 +332,140 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
                     }
                 }
                 mMediaPlayer.start();
-                playVideo = true;
+                status = 1;
+                videoOn = true;
             } else if(object == mTrailer){
-                mMediaPlayer.pause();
-                mTrailer.setVisible(false);
-                mButton.setVisible(true);
-                playVideo = false;
+                if(status == 1) {
+                    mLeftBoard.setVisible(false);
+                    mRightBoard.setVisible(false);
+                    status = 2;
+                    videoOn = true;
+                } else if(status == 2) {
+                    mMediaPlayer.pause();
+                    mTrailer.setVisible(false);
+                    mButton.setVisible(true);
+                    status = 0;
+                    videoOn = false;
+                }
             }
+            return status;
         }
 
         public void onPause() {
-            mMediaPlayer.stop();
-            mMediaPlayer.release();
+            if(mMediaPlayer.isPlaying())
+                mMediaPlayer.stop();
+        }
+
+        public void hide() {
+            mButton.setVisible(false);
+            mTrailer.setVisible(false);
+            mLeftBoard.setVisible(false);
+            mRightBoard.setVisible(false);
+        }
+
+        public void show() {
+            mButton.setVisible(true);
+        }
+    }
+
+    private class Cover extends Plane {
+        private Material contentMaterial;
+        private Object3D mSphere;
+        private String url;
+
+        public Cover(int ID) {
+            super(10, 10, 1, 1);
+            contentMaterial = new Material();
+            try {
+                switch(ID) {
+                    case 3:
+                        contentMaterial.addTexture(new Texture("beers", R.drawable.beers));
+                        url = "https://www.amazon.com/500-Beers-Compendium-Sellers-Publishing/dp/1416207880/ref=sr_1_1?ie=UTF8&qid=1471501468&sr=8-1&keywords=500+beers";
+                        break;
+                    case 4:
+                        contentMaterial.addTexture(new Texture("mobydick", R.drawable.mobydick));
+                        url = "https://www.amazon.com/Moby-Dick-Herman-Melville/dp/1503280780/ref=sr_1_2?ie=UTF8&qid=1471501519&sr=8-2&keywords=mobydick";
+                        break;
+                    case 5:
+                        contentMaterial.addTexture(new Texture("whatif", R.drawable.whatif));
+                        url = "https://www.amazon.com/What-If-Scientific-Hypothetical-Questions/dp/0544272994/ref=sr_1_1?ie=UTF8&qid=1471501539&sr=8-1&keywords=what+if";
+                        break;
+                    default:
+                        break;
+                }
+            } catch (ATexture.TextureException e) {
+                e.printStackTrace();
+            }
+            contentMaterial.setColorInfluence(0);
+            contentMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
+            this.setMaterial(contentMaterial);
+
+            try {
+                Material material = new Material();
+                material.addTexture(new Texture("earthColors",
+                        R.drawable.earthtruecolor_nasa_big));
+                material.setColorInfluence(0);
+                mSphere = new Sphere(0.6f, 24, 24);
+                mSphere.setMaterial(material);
+                mSphere.setPosition(-4, -4, 0.4f);
+                this.addChild(mSphere);
+            } catch (ATexture.TextureException e) {
+                e.printStackTrace();
+            }
+
+            mPicker.registerObject(mSphere);
+        }
+
+        public void onRender() {
+            mSphere.rotate(Vector3.Axis.Y, 1.0);
+        }
+
+        public int onTouch(Object3D object) {
+            if(object == mSphere) {
+                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                getContext().startActivity(browserIntent);
+            }
+            return 0;
+        }
+
+        public void onPause() {
+        }
+
+        public void hide() {
+            this.setVisible(false);
+        }
+
+        public void show() {
+            this.setVisible(true);
         }
     }
 }
+
+
+/*
+textMaterial = new Material();
+        textMaterial.enableLighting(true);
+        textMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
+
+        mTextBitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888);
+        mTextCanvas = new Canvas(mTextBitmap);
+        mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mTextPaint.setColor(Color.RED);
+        mTextPaint.setTextSize(20);
+        mTextCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
+        mTextCanvas.drawText("hello world", 10, 20, mTextPaint);
+
+        mTextTexture = new AlphaMapTexture("textTexture", mTextBitmap);
+        try {
+        textMaterial.addTexture(mTextTexture);
+        } catch (ATexture.TextureException e) {
+        e.printStackTrace();
+        }
+        textMaterial.setColorInfluence(1);
+
+        mText = new Plane(8, 10, 1, 1, Vector3.Axis.Z);
+        mText.setColor(Color.RED);
+        mText.setPosition(0, 0, 0.1);
+        mText.setMaterial(textMaterial);
+        mText.setVisible(true);
+        this.addChild(mText);*/
