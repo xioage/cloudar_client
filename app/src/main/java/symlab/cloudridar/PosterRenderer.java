@@ -25,7 +25,9 @@ import org.rajawali3d.materials.textures.StreamingTexture;
 import org.rajawali3d.materials.textures.Texture;
 import org.rajawali3d.math.Matrix4;
 import org.rajawali3d.math.vector.Vector3;
+import org.rajawali3d.primitives.Cube;
 import org.rajawali3d.primitives.Plane;
+import org.rajawali3d.primitives.RectangularPrism;
 import org.rajawali3d.primitives.Sphere;
 import org.rajawali3d.renderer.Renderer;
 import org.rajawali3d.util.ObjectColorPicker;
@@ -53,7 +55,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     private String TAG = "PosterRenderer";
 
     private boolean onlineVideo = false;
-    private boolean videoOn = false;
 
     public PosterRenderer(Context context, int scale) {
         super(context);
@@ -194,12 +195,10 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     }
 
     public void onObjectPicked(Object3D object) {
-        int status;
         int pickedTrailer = -1;
 
         for(int i = 0; i < trailerNum; i++) {
-            status = trailers[i].onTouch(object);
-            if (status > 0) {
+            if(trailers[i].onTouch(object)) {
                 pickedTrailer = i;
             }
         }
@@ -228,11 +227,12 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     }
 
     private class Trailer extends Plane {
-        private Plane mButton, mTrailer, mTrailerBoard, mLeftBoard, mRightBoard;
-        private Material baseMaterial, buttonMaterial, trailerMaterial, trailerBoardMaterial, boardMaterial;
+        private RectangularPrism mBoard;
+        private Plane mButton, mTrailer;
+        private Material baseMaterial, boardMaterial, trailerMaterial, buttonMaterial;
         private MediaPlayer mMediaPlayer;
         private StreamingTexture mVideoTexture;
-        private int status = 0;
+        private boolean videoOn = false;
 
         public Trailer() {
             super(1, 1, 1, 1);
@@ -241,6 +241,23 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
             baseMaterial.setColor(Color.TRANSPARENT);
             baseMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
             this.setMaterial(baseMaterial);
+
+            mBoard = new RectangularPrism((float)26.4, (float)15.2, (float)1);
+            mBoard.setPosition(0, 0, 0.5);
+            boardMaterial = new Material();
+            try {
+                boardMaterial.addTexture(new Texture("bluelight",
+                        R.drawable.lightblue));
+            } catch (ATexture.TextureException e) {
+                e.printStackTrace();
+            }
+            boardMaterial.setColorInfluence(0);
+            mBoard.setMaterial(boardMaterial);
+            mBoard.setVisible(false);
+            this.addChild(mBoard);
+
+            mTrailer = new Plane((float)26.4, (float)15.2, 1, 1, Vector3.Axis.Z);
+            mTrailer.setPosition(0, 0, 1.1);
 
             mButton = new Plane(8, 8, 1, 1, Vector3.Axis.Z);
             mButton.setPosition(0, 0, 0.2);
@@ -255,26 +272,8 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
             mButton.setMaterial(buttonMaterial);
             this.addChild(mButton);
 
-            mTrailer = new Plane((float)26.4, (float)15.2, 1, 1, Vector3.Axis.Z);
-            mTrailer.setPosition(0, 0, 0.1);
-
-            boardMaterial = new Material();
-            boardMaterial.enableLighting(false);
-            boardMaterial.setColor(Color.TRANSPARENT);
-            boardMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
-            mLeftBoard = new Plane((float)8.2, (float)15.4, 1, 1, Vector3.Axis.Z);
-            mLeftBoard.setPosition(-9.3, 0, 0.2);
-            mLeftBoard.setMaterial(boardMaterial);
-            mLeftBoard.setVisible(false);
-            this.addChild(mLeftBoard);
-            mRightBoard = new Plane((float)8.2, (float)15.4, 1, 1, Vector3.Axis.Z);
-            mRightBoard.setPosition(9.3, 0, 0.2);
-            mRightBoard.setMaterial(boardMaterial);
-            mRightBoard.setVisible(false);
-            this.addChild(mRightBoard);
-
-            mPicker.registerObject(mButton);
             mPicker.registerObject(mTrailer);
+            mPicker.registerObject(mButton);
         }
 
         public void setTrailerContent(int movieID) {
@@ -314,16 +313,15 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
         }
 
         public void updateTexture() {
-            if(status > 0)
+            if(videoOn)
                 mVideoTexture.update();
         }
 
-        public int onTouch(Object3D object) {
+        boolean onTouch(Object3D object) {
             if(object == mButton) {
                 mButton.setVisible(false);
+                mBoard.setVisible(true);
                 mTrailer.setVisible(true);
-                mLeftBoard.setVisible(true);
-                mRightBoard.setVisible(true);
                 if(onlineVideo) {
                     try {
                         mMediaPlayer.prepare();
@@ -332,23 +330,15 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
                     }
                 }
                 mMediaPlayer.start();
-                status = 1;
                 videoOn = true;
             } else if(object == mTrailer){
-                if(status == 1) {
-                    mLeftBoard.setVisible(false);
-                    mRightBoard.setVisible(false);
-                    status = 2;
-                    videoOn = true;
-                } else if(status == 2) {
-                    mMediaPlayer.pause();
-                    mTrailer.setVisible(false);
-                    mButton.setVisible(true);
-                    status = 0;
-                    videoOn = false;
-                }
+                mMediaPlayer.pause();
+                mBoard.setVisible(false);
+                mTrailer.setVisible(false);
+                mButton.setVisible(true);
+                videoOn = false;
             }
-            return status;
+            return videoOn;
         }
 
         public void onPause() {
@@ -357,10 +347,9 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
         }
 
         public void hide() {
-            mButton.setVisible(false);
+            mBoard.setVisible(false);
             mTrailer.setVisible(false);
-            mLeftBoard.setVisible(false);
-            mRightBoard.setVisible(false);
+            mButton.setVisible(false);
         }
 
         public void show() {
