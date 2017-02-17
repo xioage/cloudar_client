@@ -9,6 +9,7 @@ import android.hardware.Camera;
 import android.hardware.Camera.Size;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
@@ -41,6 +42,9 @@ import org.opencv.video.Video;
 import org.rajawali3d.renderer.ISurfaceRenderer;
 import org.rajawali3d.view.ISurface;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -73,8 +77,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
     private SocketAddress serverAddress;
     private DatagramChannel dataChannel;
-    private int portNum = 51717;
-    private String ip = "10.89.95.132";
+    private int portNum;
+    private String ip;
     ByteBuffer resPacket = ByteBuffer.allocate(400);
 
     private Mat YUVMatTrack, YUVMatTrans, YUVMatScaled;
@@ -82,9 +86,10 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private Mat PreGRAYMat;
 
     private int frmID = 1;
-    private int lastSentID;
+    private int lastSentID = -1;
     private int resID;
     private int trackingID = 0;
+    private int oldFrmID;
     private MatOfPoint2f Points1;
     private int[] bitmap1;
     private Queue<HistoryTrackingPoints> HistoryQueue = new LinkedList<HistoryTrackingPoints>();
@@ -104,12 +109,13 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean EnableMultipleTracking = false;
 
     private final int scale = 4;
+    private final int MESSAGE_ECHO = 0;
     private final int IMAGE_TRACK = 1;
     private final int IMAGE_DETECT = 2;
     private final int TRACKPOINTS = 3;
     private final int FEATURES = 4;
-    private final int MAX_POINTS = 90;
-    private final int FREQUENCY = 60;
+    private final int MAX_POINTS = 240;
+    private final int FREQUENCY = 30;
     private final int previewWidth = 1920;
     private final int previewHeight = 1080;
     private float dispScale;
@@ -160,6 +166,20 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         else if (disp.getHeight() == 1440)
             dispScale = (float) 1.33 * scale;
 
+        File sdcard = Environment.getExternalStorageDirectory();
+        File file = new File(sdcard,"cloudConfig.txt");
+
+        try {
+            BufferedReader br = new BufferedReader(new FileReader(file));
+
+            ip = br.readLine();
+            portNum = Integer.parseInt(br.readLine());
+            br.close();
+        }
+        catch (IOException e) {
+            Log.d(TAG, "config file error");
+        }
+
         if(Show2DView) {
             mDraw = new DrawOnTop(this);
             addContentView(mDraw, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -177,11 +197,10 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             dataChannel = DatagramChannel.open();
             dataChannel.configureBlocking(false);
             dataChannel.socket().connect(serverAddress);
-
         } catch (Exception e) {
             e.printStackTrace();
         }
-        for (int i = 1; i <= 1; i++) senderTskQueue.add(i);
+        for (int i = 1; i <= 2; i++) senderTskQueue.add(i);
 
         YUVMatTrack = new Mat(previewHeight + previewHeight / 2, previewWidth, CvType.CV_8UC1);
         YUVMatTrans = new Mat(previewHeight + previewHeight / 2, previewWidth, CvType.CV_8UC1);
@@ -317,20 +336,29 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         @Override
         public void onPreviewFrame(byte[] data, Camera camera) {
+            mCamera.addCallbackBuffer(callbackBuffer);
+
             if (senderTskQueue.peek() != null) {
                 //Long tsLong = System.currentTimeMillis();
                 //String ts_getCameraFrame = tsLong.toString();
                 //Log.d(Eval, "get camera frame " + frmID + ": " + ts_getCameraFrame);
-                new frmTrackingTask(senderTskQueue.poll()).execute(data);
+                senderTskQueue.poll();
+                new frmTrackingTask(frmID).execute(data);
 
-                if (frmID % FREQUENCY == 5) {
+                if(frmID <= 5)
+                    new frmTransmissionTask(frmID).execute();
+
+                if (frmID % FREQUENCY == 10) {
                     lastSentID = frmID;
+                    Long tsLong = System.currentTimeMillis();
+                    String ts_getCameraFrame = tsLong.toString();
+                    Log.d(Eval, "get frame " + frmID + " data: " + ts_getCameraFrame);
                     new frmTransmissionTask(lastSentID).execute(data);
                 }
                 new resReceivingTask().execute();
-            }
 
-            mCamera.addCallbackBuffer(callbackBuffer);
+                frmID++;
+            }
         }
     };
 
@@ -381,7 +409,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     //Core class for processing, with tracking and all kinds of calculation.
     //Before you fully understand the logic, don't change it.
     private class frmTrackingTask extends AsyncTask<byte[], Void, Void> {
-        private int tskId;
+        private int frmID;
         private HistoryTrackingPoints curHistory;
         private MatOfPoint2f Points2;
         private MatOfPoint2f[] Recs2;
@@ -390,15 +418,21 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         private MatOfPoint2f scenePoints;
         private Mat rvec, tvec;
         private Mat rotation;
-        private boolean viewReady;
+
+        private boolean viewReady = false;
+        private boolean recoverFrame = false;
         private Long tsLong;
 
-        public frmTrackingTask(int tskId) {
-            this.tskId = tskId;
+        public frmTrackingTask(int frmID) {
+            this.frmID = frmID;
         }
 
         @Override
         protected Void doInBackground(byte[]... frmdata) {
+            //Long tsLong = System.currentTimeMillis();
+            //String ts_getCameraFrame = tsLong.toString();
+            //Log.d(Eval, "get frame " + frmID + " data: " + ts_getCameraFrame);
+
             YUVMatTrack.put(0, 0, frmdata[0]);
             Imgproc.resize(YUVMatTrack, YUVMatScaled, YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
             Mat GRAYMat = new Mat(previewHeight / scale, previewWidth / scale, CvType.CV_8UC1);
@@ -410,6 +444,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
             if (PosterRecognized) {
                 Markers1 = Markers0;
+                PosterRecognized = false;
+                recoverFrame = true;
             }
 
             if (Points1 != null) {
@@ -417,10 +453,10 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 MatOfFloat err = new MatOfFloat();
                 Points2 = new MatOfPoint2f();
                 Video.calcOpticalFlowPyrLK(PreGRAYMat, GRAYMat, Points1, Points2, status, err, winSize, 3, termcrit, 0, 0.001);
-
+                PreGRAYMat = GRAYMat;
                 //tsLong = System.currentTimeMillis();
                 //String ts_getPoints = tsLong.toString();
-                //Log.d(Eval, "get points " + frmID);
+                //Log.d(Eval, "get points " + frmID + " :" + ts_getPoints);
 
                 bitmap2 = new int[MAX_POINTS];
                 int i, k, j;
@@ -455,8 +491,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
                 if (k > 4) {
                     if (Markers1 != null && Markers1.Num != 0) {
-                        if (PosterRecognized) {
-                            Log.d(TAG, "frm " + frmID + " recover from " + resID);
+                        if (recoverFrame) {
+                            //Log.d(TAG, "frm " + frmID + " recover from " + resID);
 
                             do {
                                 curHistory = HistoryQueue.poll();
@@ -526,6 +562,9 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                             }
                         }
 
+                        Points1 = Points2;
+                        bitmap1 = bitmap2;
+
                         Recs2 = new MatOfPoint2f[Markers1.Num];
                         for (int m = 0; m < Markers1.Num; m++) {
                             if(Markers1.Recs[m] != null && Markers1.Homographys[m] != null) {
@@ -580,25 +619,25 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                                         glViewMatrixData[col * 4 + row] = viewMatrix.get(row, col)[0];
 
                                 ((PosterRenderer) mRenderer).setGlViewMatrix(glViewMatrixData);
-                                viewReady = false;
-
                                 //tsLong = System.currentTimeMillis();
                                 //String ts_showResult = tsLong.toString();
-                                //Log.d(Eval, "frm " + frmID + " showed");
+                                //Log.d(Eval, "frm " + frmID + " showed: " + ts_showResult);
                             }
 
-                            if(PosterRecognized) {
-                                PosterRecognized = false;
+                            if(recoverFrame) {
                             }
                         }
+                    } else {
+                        Points1 = Points2;
+                        bitmap1 = bitmap2;
                     }
 
-                    Points1 = Points2;
-                    bitmap1 = bitmap2;
                 } else {
                     Log.v(TAG, "too few tracking points, track again");
                     InitializeNeeded = true;
                 }
+            } else {
+                PreGRAYMat = GRAYMat;
             }
 
             if (InitializeNeeded) {
@@ -628,19 +667,16 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 InitializeNeeded = false;
             }
 
-            PreGRAYMat = GRAYMat;
-            if (frmID % FREQUENCY == 5) {
+            if (frmID % FREQUENCY == 10)
                 HistoryQueue.add(new HistoryTrackingPoints(frmID, trackingID, new MatOfPoint2f(Points1.clone()), bitmap1.clone()));
-            }
 
-            frmID++;
             return null;
         }
 
         @Override
         public void onPostExecute(Void result) {
-            if(Show2DView) mDraw.invalidate();
-            senderTskQueue.add(this.tskId);
+            if(Show2DView && frmID%30 == 1) mDraw.invalidate();
+            senderTskQueue.add(frmID%2);
         }
 
         private boolean isInside(Point point, Mat Rec) {
@@ -658,7 +694,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     }
 
     private class frmTransmissionTask extends AsyncTask<byte[], Void, Void> {
-        private int dataType = IMAGE_DETECT;
+        private int dataType;
         private int frmID;
         private byte[] frmdataToSend;
         private byte[] frmid;
@@ -669,13 +705,19 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         public frmTransmissionTask(int frmID) {
             this.frmID = frmID;
+            if(this.frmID <= 5)
+                dataType = MESSAGE_ECHO;
+            else
+                dataType = IMAGE_DETECT;
         }
 
         @Override
         protected Void doInBackground(byte[]... frmdata) {
-            YUVMatTrans.put(0, 0, frmdata[0]);
-            Imgproc.cvtColor(YUVMatTrans, BGRMat, Imgproc.COLOR_YUV420sp2BGR);
-            Imgproc.resize(BGRMat, BGRMatScaled, BGRMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
+            if(dataType == IMAGE_DETECT) {
+                YUVMatTrans.put(0, 0, frmdata[0]);
+                Imgproc.cvtColor(YUVMatTrans, BGRMat, Imgproc.COLOR_YUV420sp2BGR);
+                Imgproc.resize(BGRMat, BGRMatScaled, BGRMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
+            }
 
             if (dataType == IMAGE_DETECT) {
                 MatOfByte imgbuff = new MatOfByte();
@@ -697,9 +739,10 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                     System.arraycopy(tmp, 0, frmdataToSend, i * 8 + 4, 4);
                 }
                 System.arraycopy(bitmap1, 0, frmdataToSend, datasize - MAX_POINTS, MAX_POINTS);
+            }  else if (dataType == MESSAGE_ECHO) {
+                datasize = 0;
+                frmdataToSend = null;
             }
-            //Log.d(TAG, "datasize: " + datasize);
-            //datasize = 1460;
             packetContent = new byte[12 + datasize];
 
             frmid = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(frmID).array();
@@ -708,16 +751,21 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             System.arraycopy(frmid, 0, packetContent, 0, 4);
             System.arraycopy(datatype, 0, packetContent, 4, 4);
             System.arraycopy(frmsize, 0, packetContent, 8, 4);
-            System.arraycopy(frmdataToSend, 0, packetContent, 12, datasize);
+            if(frmdataToSend != null)
+                System.arraycopy(frmdataToSend, 0, packetContent, 12, datasize);
 
             try {
                 ByteBuffer buffer = ByteBuffer.allocate(packetContent.length).put(packetContent);
                 buffer.flip();
                 dataChannel.send(buffer, serverAddress);
+                //Log.d(Eval, "sent size: " + packetContent.length);
 
-                //Long tsLong = System.currentTimeMillis();
-                //String ts_sendCameraFrame = tsLong.toString();
-                Log.d(Eval, "frame " + frmID + " sent");
+                Long tsLong = System.currentTimeMillis();
+                String ts_sendCameraFrame = tsLong.toString();
+                if(frmID <= 5)
+                    Log.d(Eval, "echo " + frmID + " sent: " + ts_sendCameraFrame);
+                else
+                    Log.d(Eval, "frame " + frmID + " sent: " + ts_sendCameraFrame);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -739,6 +787,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             try {
                 if (dataChannel.receive(resPacket) != null) {
                     res = resPacket.array();
+                    //Log.d(Eval, "received size: " + res.length);
                 }
                 else
                     Log.v(TAG, "nothing received");
@@ -751,11 +800,14 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 resID = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
                 System.arraycopy(res, 4, tmp, 0, 4);
                 newMarkerNum = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
-                //Long tsLong = System.currentTimeMillis();
-                //String ts_getResult = tsLong.toString();
-                Log.d(Eval, "res " + resID + " received");
 
-                if (resID == lastSentID) {
+                Long tsLong = System.currentTimeMillis();
+                String ts_getResult = tsLong.toString();
+
+                if (resID <= 5) {
+                    Log.d(Eval, "echo " + resID + " received: " + ts_getResult);
+                } else if (resID == lastSentID) {
+                    Log.d(Eval, "res " + resID + " received: " + ts_getResult);
                     Markers0 = new Markers(newMarkerNum);
 
                     for (int i = 0; i < newMarkerNum; i++) {
@@ -791,7 +843,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                     if(ShowGL && PosterChanged)
                         ((PosterRenderer) mRenderer).onPosterChanged(Markers0);
                 } else {
-                    Log.d(TAG, "discard outdate result");
+                    Log.d(TAG, "discard outdate result: " + resID);
                 }
             }
             return null;
@@ -825,7 +877,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             paintWord.setColor(Color.RED);
             paintWord.setTextAlign(Paint.Align.CENTER);
             paintWord.setTextSize(50);
-
         }
 
         @Override
@@ -833,10 +884,11 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             super.onDraw(canvas);
 
             if (ShowFPS) {
-                time_n = (int) System.currentTimeMillis();
-                if (frmID % 10 == 1) {
-                    fps = 10000 / (time_n - time_o);
+                if (true) {
+                    time_n = (int) System.currentTimeMillis();
+                    fps = 1000 * (frmID - oldFrmID) / (time_n - time_o);
                     time_o = time_n;
+                    oldFrmID = frmID;
                 }
                 canvas.drawText("fps: " + fps, 100, 50, paintWord);
             }

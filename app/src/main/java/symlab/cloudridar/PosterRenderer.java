@@ -1,13 +1,8 @@
 package symlab.cloudridar;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.PorterDuff;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -25,7 +20,6 @@ import org.rajawali3d.materials.textures.StreamingTexture;
 import org.rajawali3d.materials.textures.Texture;
 import org.rajawali3d.math.Matrix4;
 import org.rajawali3d.math.vector.Vector3;
-import org.rajawali3d.primitives.Cube;
 import org.rajawali3d.primitives.Plane;
 import org.rajawali3d.primitives.RectangularPrism;
 import org.rajawali3d.primitives.Sphere;
@@ -55,6 +49,7 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     private String TAG = "PosterRenderer";
 
     private boolean onlineVideo = false;
+    private boolean enableVideo = false;
 
     public PosterRenderer(Context context, int scale) {
         super(context);
@@ -149,7 +144,8 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
                 switch(curID) {
                     case 0:
                     case 1:
-                        trailers[i].setTrailerContent(curID);
+                        if(enableVideo)
+                            trailers[i].setTrailerContent(curID);
                         trailers[i].show();
                         trailerNum++;
                         break;
@@ -242,7 +238,7 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
             baseMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
             this.setMaterial(baseMaterial);
 
-            mBoard = new RectangularPrism((float)26.4, (float)15.2, (float)1);
+            mBoard = new RectangularPrism((float)26.8, (float)15.6, (float)1);
             mBoard.setPosition(0, 0, 0.5);
             boardMaterial = new Material();
             try {
@@ -318,6 +314,9 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
         }
 
         boolean onTouch(Object3D object) {
+            if(!enableVideo)
+                return false;
+
             if(object == mButton) {
                 mButton.setVisible(false);
                 mBoard.setVisible(true);
@@ -342,7 +341,7 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
         }
 
         public void onPause() {
-            if(mMediaPlayer.isPlaying())
+            if(enableVideo && mMediaPlayer.isPlaying())
                 mMediaPlayer.stop();
         }
 
