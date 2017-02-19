@@ -60,6 +60,10 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
 
+import symlab.core.Constants;
+import symlab.core.FrameTask;
+import symlab.core.SharedMemory;
+
 
 public class MainActivity extends Activity implements View.OnTouchListener{
 
@@ -69,8 +73,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean mInPreview = false;
     private boolean mCameraConfigured = false;
     private DrawOnTop mDraw;
-    private static final String TAG = "Poster";
-    private static final String Eval = "Evaluation";
     private byte[] callbackBuffer;
     private Queue<Integer> senderTskQueue = new LinkedList<Integer>();
     private int time_o, time_n, fps;
@@ -81,62 +83,20 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private String ip;
     ByteBuffer resPacket = ByteBuffer.allocate(400);
 
-    private Mat YUVMatTrack, YUVMatTrans, YUVMatScaled;
-    private Mat BGRMat, BGRMatScaled;
-    private Mat PreGRAYMat;
-
-    private int frmID = 1;
-    private int lastSentID = -1;
-    private int resID;
-    private int trackingID = 0;
-    private int oldFrmID;
-    private MatOfPoint2f Points1;
-    private int[] bitmap1;
-    private Queue<HistoryTrackingPoints> HistoryQueue = new LinkedList<HistoryTrackingPoints>();
-    private Markers Markers0, Markers1;
 
     private MatOfInt params;
     private FeatureDetector detector;
     private TermCriteria termcrit;
-    private org.opencv.core.Size subPixWinSize;
-    private org.opencv.core.Size winSize;
 
-    private boolean InitializeNeeded = true;
-    private boolean PosterChanged = false;
-    private boolean PosterRecognized = false;
-    private boolean Show2DView = true;
-    private boolean ShowGL = true;
-    private boolean EnableMultipleTracking = false;
-
-    private final int scale = 4;
     private final int MESSAGE_ECHO = 0;
     private final int IMAGE_TRACK = 1;
     private final int IMAGE_DETECT = 2;
     private final int TRACKPOINTS = 3;
     private final int FEATURES = 4;
-    private final int MAX_POINTS = 240;
-    private final int FREQUENCY = 30;
-    private final int previewWidth = 1920;
-    private final int previewHeight = 1080;
     private float dispScale;
 
     protected ISurface mRenderSurface;
     protected ISurfaceRenderer mRenderer;
-
-    private Mat cameraMatrix = new Mat(3, 3, CvType.CV_64FC1);
-    private MatOfDouble distCoeffs = new MatOfDouble();
-    private MatOfPoint3f posterPoints = new MatOfPoint3f();
-    private Mat cvToGl = new Mat(4, 4, CvType.CV_64FC1);
-    private Mat viewMatrix = Mat.zeros(4, 4, CvType.CV_64FC1);
-    private double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
-    private double[] distCoeffsData = new double[]{2.8048006231906419e-001, -1.1828928706191699e+000, 0, 0, 1.4865861018485209e+000};
-    private Point3[][] posterPointsData = new Point3[][]{{new Point3(-5, 7.4, 0), new Point3(5, 7.4, 0), new Point3(5, -7.4, 0), new Point3(-5, -7.4, 0)},
-            {new Point3(-5, 7.2, 0), new Point3(5, 7.2, 0), new Point3(5, -7.2, 0), new Point3(-5, -7.2, 0)},
-            {new Point3(5, 5, 0), new Point3(15, 5, 0), new Point3(15, -5, 0), new Point3(5, -5, 0)},
-            {new Point3(5, 8, 0), new Point3(15, 8, 0), new Point3(15, -8, 0), new Point3(5, -8, 0)},
-            {new Point3(5, 6.6, 0), new Point3(15, 6.6, 0), new Point3(15, -6.6, 0), new Point3(5, -6.6, 0)}};
-    private double[][] cvToGlData = new double[][]{{1.0, 0, 0, 0}, {0, -1.0, 0, 0}, {0, 0, -1.0, 0}, {0, 0, 0, 1.0}};
-    private double[] glViewMatrixData;
 
     static {
         System.loadLibrary("opencv_java");
@@ -144,7 +104,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.i(TAG, " onCreate() called.");
+        Log.i(Constants.TAG, " onCreate() called.");
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_main);
@@ -162,10 +122,11 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         Display disp = getWindowManager().getDefaultDisplay();
         if (disp.getHeight() == 1080)
-            dispScale = scale;
+            dispScale = Constants.scale;
         else if (disp.getHeight() == 1440)
-            dispScale = (float) 1.33 * scale;
+            dispScale = (float) 1.33 * Constants.scale;
 
+        /*
         File sdcard = Environment.getExternalStorageDirectory();
         File file = new File(sdcard,"cloudConfig.txt");
 
@@ -177,17 +138,22 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             br.close();
         }
         catch (IOException e) {
-            Log.d(TAG, "config file error");
+            Log.d(Constants.TAG, "config file error");
         }
+        */
 
-        if(Show2DView) {
+        ip = "104.199.140.59";
+        portNum = 51717;
+
+        SharedMemory.initMemory();
+        if(SharedMemory.Show2DView) {
             mDraw = new DrawOnTop(this);
             addContentView(mDraw, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
 
-        if(ShowGL) {
+        if(SharedMemory.ShowGL) {
             mRenderSurface = (ISurface) findViewById(R.id.rajwali_surface);
-            mRenderer = new PosterRenderer(this, scale);
+            mRenderer = new PosterRenderer(this, Constants.scale);
             mRenderSurface.setSurfaceRenderer(mRenderer);
             ((View) mRenderSurface).setOnTouchListener(this);
         }
@@ -202,28 +168,13 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         }
         for (int i = 1; i <= 2; i++) senderTskQueue.add(i);
 
-        YUVMatTrack = new Mat(previewHeight + previewHeight / 2, previewWidth, CvType.CV_8UC1);
-        YUVMatTrans = new Mat(previewHeight + previewHeight / 2, previewWidth, CvType.CV_8UC1);
-        YUVMatScaled = new Mat((previewHeight + previewHeight / 2) / scale, previewWidth / scale, CvType.CV_8UC1);
-        BGRMat = new Mat(previewHeight, previewWidth, CvType.CV_8UC3);
-        BGRMatScaled = new Mat(previewHeight / scale, previewWidth / scale, CvType.CV_8UC3);
         params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 50);
         detector = FeatureDetector.create(FeatureDetector.SURF);
-        termcrit = new TermCriteria(TermCriteria.MAX_ITER | TermCriteria.EPS, 20, 0.03);
-        subPixWinSize = new org.opencv.core.Size(10, 10);
-        winSize = new org.opencv.core.Size(31, 31);
-        for(int i = 0; i < 3; i++)
-            for(int j = 0; j < 3; j++)
-                cameraMatrix.put(i, j, cameraMatrixData[i][j]);
-        distCoeffs.fromArray(distCoeffsData);
-        for(int i = 0; i < 4; i++)
-            for(int j = 0; j < 4; j++)
-                cvToGl.put(i, j, cvToGlData[i][j]);
     }
 
     @Override
     public void onStart() {
-        Log.i(TAG, " onStart() called.");
+        Log.i(Constants.TAG, " onStart() called.");
         super.onStart();
 
         new startTransmissionTask().execute();
@@ -231,18 +182,18 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
     @Override
     public void onResume() {
-        Log.i(TAG, " onResume() called.");
+        Log.i(Constants.TAG, " onResume() called.");
         super.onResume();
         mCamera = Camera.open();
-        glViewMatrixData = new double[16];
-        Markers0 = null;
-        Markers1 = null;
+        SharedMemory.glViewMatrixData = new double[16];
+        SharedMemory.Markers0 = null;
+        SharedMemory.Markers1 = null;
     }
 
     @Override
     public void onPause() {
-        Log.i(TAG, " onPause() called.");
-        if(ShowGL)
+        Log.i(Constants.TAG, " onPause() called.");
+        if(SharedMemory.ShowGL)
             ((PosterRenderer) mRenderer).onActivityPause();
 
         if (mInPreview)
@@ -257,7 +208,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
     @Override
     public void onStop() {
-        Log.i(TAG, " onStop() called.");
+        Log.i(Constants.TAG, " onStop() called.");
         super.onStop();
         new endTransmissionTask().execute();
     }
@@ -270,14 +221,14 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             e.printStackTrace();
         }
         senderTskQueue.clear();
-        Log.i(TAG, " onDestroy() called.");
+        Log.i(Constants.TAG, " onDestroy() called.");
         super.onDestroy();
     }
 
     @Override
     public boolean onTouch(View v, MotionEvent event) {
-        Log.d(TAG, "touch event");
-        if (ShowGL && event.getAction() == MotionEvent.ACTION_DOWN) {
+        Log.d(Constants.TAG, "touch event");
+        if (SharedMemory.ShowGL && event.getAction() == MotionEvent.ACTION_DOWN) {
             ((PosterRenderer) mRenderer).getObjectAt(event.getX(), event.getY());
         }
 
@@ -285,7 +236,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     }
 
     private void initPreview(int width, int height) {
-        Log.i(TAG, "initPreview() called");
+        Log.i(Constants.TAG, "initPreview() called");
         if (mCamera != null && mPreviewHolder.getSurface() != null) {
             if (!mCameraConfigured) {
                 Camera.Parameters params = mCamera.getParameters();
@@ -303,7 +254,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 mCamera.addCallbackBuffer(callbackBuffer);
                 mCamera.setPreviewCallbackWithBuffer(frameIMGProcCallback);
             } catch (Throwable t) {
-                Log.e(TAG, "Exception in initPreview()", t);
+                Log.e(Constants.TAG, "Exception in initPreview()", t);
             }
         }
     }
@@ -318,17 +269,17 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
     SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {
         public void surfaceCreated(SurfaceHolder holder) {
-            Log.i(TAG, " surfaceCreated() called.");
-            initPreview(previewWidth, previewHeight);
+            Log.i(Constants.TAG, " surfaceCreated() called.");
+            initPreview(Constants.previewWidth, Constants.previewHeight);
             startPreview();
         }
 
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-            Log.i(TAG, " surfaceChanged() called.");
+            Log.i(Constants.TAG, " surfaceChanged() called.");
         }
 
         public void surfaceDestroyed(SurfaceHolder holder) {
-            Log.i(TAG, " surfaceDestroyed() called.");
+            Log.i(Constants.TAG, " surfaceDestroyed() called.");
         }
     };
 
@@ -343,21 +294,28 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 //String ts_getCameraFrame = tsLong.toString();
                 //Log.d(Eval, "get camera frame " + frmID + ": " + ts_getCameraFrame);
                 senderTskQueue.poll();
-                new frmTrackingTask(frmID).execute(data);
+                FrameTask frameTask = new FrameTask(SharedMemory.frmID, (PosterRenderer) mRenderer);
+                frameTask.setCallbackListener(new FrameTask.CallbackListener() {
+                    @Override
+                    public void onFinish() {
+                        if(SharedMemory.Show2DView && SharedMemory.frmID%30 == 1) mDraw.invalidate();
+                        senderTskQueue.add(SharedMemory.frmID%2);
+                    }
+                });
+                frameTask.execute(data);
+                if(SharedMemory.frmID <= 5)
+                    new frmTransmissionTask(SharedMemory.frmID).execute();
 
-                if(frmID <= 5)
-                    new frmTransmissionTask(frmID).execute();
-
-                if (frmID % FREQUENCY == 10) {
-                    lastSentID = frmID;
+                if (SharedMemory.frmID % Constants.FREQUENCY == 10) {
+                    SharedMemory.lastSentID = SharedMemory.frmID;
                     Long tsLong = System.currentTimeMillis();
                     String ts_getCameraFrame = tsLong.toString();
-                    Log.d(Eval, "get frame " + frmID + " data: " + ts_getCameraFrame);
-                    new frmTransmissionTask(lastSentID).execute(data);
+                    Log.d(Constants.Eval, "get frame " + SharedMemory.frmID + " data: " + ts_getCameraFrame);
+                    new frmTransmissionTask(SharedMemory.lastSentID).execute(data);
                 }
                 new resReceivingTask().execute();
 
-                frmID++;
+                SharedMemory.frmID++;
             }
         }
     };
@@ -366,7 +324,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         @Override
         protected Void doInBackground(byte[]... frmdata) {
             try {
-                Log.d(TAG, "sending start signals");
+                Log.d(Constants.TAG, "sending start signals");
                 for (int i = 0; i < 3; i++) {
                     ByteBuffer buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(0);
                     buffer.flip();
@@ -388,7 +346,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         @Override
         protected Void doInBackground(byte[]... frmdata) {
             try {
-                Log.d(TAG, "sending end signals");
+                Log.d(Constants.TAG, "sending end signals");
                 for (int i = 0; i < 1; i++) {
                     ByteBuffer buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(-1);
                     buffer.flip();
@@ -403,293 +361,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         @Override
         public void onPostExecute(Void result) {
-        }
-    }
-
-    //Core class for processing, with tracking and all kinds of calculation.
-    //Before you fully understand the logic, don't change it.
-    private class frmTrackingTask extends AsyncTask<byte[], Void, Void> {
-        private int frmID;
-        private HistoryTrackingPoints curHistory;
-        private MatOfPoint2f Points2;
-        private MatOfPoint2f[] Recs2;
-        private int[] bitmap2;
-        private MatOfPoint2f[] subHistoryPoints, subPoints1, subPoints2;
-        private MatOfPoint2f scenePoints;
-        private Mat rvec, tvec;
-        private Mat rotation;
-
-        private boolean viewReady = false;
-        private boolean recoverFrame = false;
-        private Long tsLong;
-
-        public frmTrackingTask(int frmID) {
-            this.frmID = frmID;
-        }
-
-        @Override
-        protected Void doInBackground(byte[]... frmdata) {
-            //Long tsLong = System.currentTimeMillis();
-            //String ts_getCameraFrame = tsLong.toString();
-            //Log.d(Eval, "get frame " + frmID + " data: " + ts_getCameraFrame);
-
-            YUVMatTrack.put(0, 0, frmdata[0]);
-            Imgproc.resize(YUVMatTrack, YUVMatScaled, YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-            Mat GRAYMat = new Mat(previewHeight / scale, previewWidth / scale, CvType.CV_8UC1);
-            Imgproc.cvtColor(YUVMatScaled, GRAYMat, Imgproc.COLOR_YUV2GRAY_420);
-
-            //tsLong = System.currentTimeMillis();
-            //String ts_resize = tsLong.toString();
-            //Log.d(Eval, "resize camera frame " + frmID + ": " + ts_resize);
-
-            if (PosterRecognized) {
-                Markers1 = Markers0;
-                PosterRecognized = false;
-                recoverFrame = true;
-            }
-
-            if (Points1 != null) {
-                MatOfByte status = new MatOfByte();
-                MatOfFloat err = new MatOfFloat();
-                Points2 = new MatOfPoint2f();
-                Video.calcOpticalFlowPyrLK(PreGRAYMat, GRAYMat, Points1, Points2, status, err, winSize, 3, termcrit, 0, 0.001);
-                PreGRAYMat = GRAYMat;
-                //tsLong = System.currentTimeMillis();
-                //String ts_getPoints = tsLong.toString();
-                //Log.d(Eval, "get points " + frmID + " :" + ts_getPoints);
-
-                bitmap2 = new int[MAX_POINTS];
-                int i, k, j;
-                for (i = k = j = 0; i < Points2.rows(); i++) {
-                    while (j < MAX_POINTS && bitmap1[j] == 0)
-                        j++;
-
-                    if (j == MAX_POINTS)
-                        break;
-
-                    if (status.toArray()[i] == 0) {
-                        j++;
-                        continue;
-                    }
-
-                    if (k != i) {
-                        Points1.put(k, 0, Points1.get(i, 0));
-                        Points2.put(k, 0, Points2.get(i, 0));
-                    }
-                    k++;
-                    if (EnableMultipleTracking)
-                        bitmap2[j] = bitmap1[j];
-                    else
-                        bitmap2[j] = 1;
-                    j++;
-                }
-                if (k != Points1.rows())
-                    Points1 = new MatOfPoint2f(Points1.rowRange(0, k));
-                if (k != Points2.rows())
-                    Points2 = new MatOfPoint2f(Points2.rowRange(0, k));
-                Log.v(TAG, "tracking points left: " + k);
-
-                if (k > 4) {
-                    if (Markers1 != null && Markers1.Num != 0) {
-                        if (recoverFrame) {
-                            //Log.d(TAG, "frm " + frmID + " recover from " + resID);
-
-                            do {
-                                curHistory = HistoryQueue.poll();
-                            } while (curHistory.HistoryFrameID != resID);
-
-                            if (curHistory.HistoryTrackingID == trackingID) {
-
-                                for (i = k = j = 0; i < curHistory.HistoryPoints.rows(); i++) {
-                                    while (curHistory.historybitmap[j] == 0) j++;
-
-                                    if (bitmap2[j] == 0) {
-                                        j++;
-                                        continue;
-                                    }
-
-                                    curHistory.HistoryPoints.put(k++, 0, curHistory.HistoryPoints.get(i, 0));
-                                    j++;
-                                }
-                                curHistory.HistoryPoints = new MatOfPoint2f(curHistory.HistoryPoints.rowRange(0, k));
-
-                                if (!EnableMultipleTracking || PosterChanged) {
-                                    Mat H = Calib3d.findHomography(curHistory.HistoryPoints, Points2, Calib3d.RANSAC, 3);
-                                    for (int m = 0; m < Markers1.Num; m++) {
-                                        Markers1.Homographys[m] = H;
-                                    }
-                                } else {
-                                    subHistoryPoints = new MatOfPoint2f[Markers1.Num];
-                                    subPoints2 = new MatOfPoint2f[Markers1.Num];
-                                    for (int m = 0; m < Markers1.Num; m++) {
-                                        subHistoryPoints[m] = new MatOfPoint2f(new Mat(Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                        subPoints2[m] = new MatOfPoint2f(new Mat(Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                        int count = 0;
-                                        for (int n = 0; n < Points2.rows(); n++) {
-                                            if (bitmap2[n] == Markers1.IDs[m]) {
-                                                subHistoryPoints[m].put(count, 0, curHistory.HistoryPoints.get(n, 0));
-                                                subPoints2[m].put(count++, 0, Points2.get(n, 0));
-                                            }
-                                        }
-                                        Markers1.Homographys[m] = Calib3d.findHomography(subHistoryPoints[m], subPoints2[m], Calib3d.RANSAC, 3);
-                                    }
-                                }
-                            } else {
-                                Log.e(TAG, "tried to recover from late result, tracking points not match");
-                            }
-                        } else {
-                            if (EnableMultipleTracking) {
-                                subPoints1 = new MatOfPoint2f[Markers1.Num];
-                                subPoints2 = new MatOfPoint2f[Markers1.Num];
-
-                                for (int m = 0; m < Markers1.Num; m++) {
-                                    subPoints1[m] = new MatOfPoint2f(new Mat(Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                    subPoints2[m] = new MatOfPoint2f(new Mat(Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                    int count = 0;
-                                    for (int n = 0; n < Points2.rows(); n++) {
-                                        if (bitmap2[n] == Markers1.IDs[m]) {
-                                            subPoints1[m].put(count, 0, Points1.get(n, 0));
-                                            subPoints2[m].put(count++, 0, Points2.get(n, 0));
-                                        }
-                                    }
-                                    Markers1.Homographys[m] = Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3);
-                                }
-                            } else {
-                                Mat H = Calib3d.findHomography(Points1, Points2, Calib3d.RANSAC, 3);
-                                for (int m = 0; m < Markers1.Num; m++) {
-                                    Markers1.Homographys[m] = H;
-                                }
-                            }
-                        }
-
-                        Points1 = Points2;
-                        bitmap1 = bitmap2;
-
-                        Recs2 = new MatOfPoint2f[Markers1.Num];
-                        for (int m = 0; m < Markers1.Num; m++) {
-                            if(Markers1.Recs[m] != null && Markers1.Homographys[m] != null) {
-                                Recs2[m] = new MatOfPoint2f();
-                                Core.perspectiveTransform(Markers1.Recs[m], Recs2[m], Markers1.Homographys[m]);
-                                viewReady = true;
-                            } else {
-                                Log.d(TAG, "null rec");
-                                viewReady = false;
-                            }
-                        }
-
-                        Markers1.Recs = Recs2;
-
-                        if(ShowGL && viewReady) {
-                            posterPoints.fromArray(posterPointsData[Markers1.IDs[0]]);
-                            scenePoints = new MatOfPoint2f(Recs2[0].clone());
-                            float x, y;
-                            float[] xy = new float[2];
-                            x = y = 0;
-                            for(int ii = 0; ii < 4; ii++)
-                            {
-                                scenePoints.get(ii, 0, xy);
-                                x += xy[0];
-                                y += xy[1];
-                            }
-                            x /= 4;
-                            y /= 4;
-                            if(x < 0 || y < 0 || x > 1920/scale || y > 1080/scale) {
-                                Log.d(TAG, "marker out of view, lost tracking");
-                                ((PosterRenderer) mRenderer).onPosterChanged(null);
-                                InitializeNeeded = true;
-                            }
-                            else {
-                                rvec = new Mat();
-                                tvec = new Mat();
-                                Calib3d.solvePnP(posterPoints, scenePoints, cameraMatrix, distCoeffs, rvec, tvec);
-
-                                rotation = new Mat();
-                                Calib3d.Rodrigues(rvec, rotation);
-                                for (int row = 0; row < 3; row++) {
-                                    for (int col = 0; col < 3; col++) {
-                                        viewMatrix.put(row, col, rotation.get(row, col));
-                                    }
-                                    viewMatrix.put(row, 3, tvec.get(row, 0));
-                                }
-                                viewMatrix.put(3, 3, 1.0);
-                                Core.gemm(cvToGl, viewMatrix, 1, new Mat(), 0, viewMatrix, 0);
-
-                                for (int col = 0; col < 4; col++)
-                                    for (int row = 0; row < 4; row++)
-                                        glViewMatrixData[col * 4 + row] = viewMatrix.get(row, col)[0];
-
-                                ((PosterRenderer) mRenderer).setGlViewMatrix(glViewMatrixData);
-                                //tsLong = System.currentTimeMillis();
-                                //String ts_showResult = tsLong.toString();
-                                //Log.d(Eval, "frm " + frmID + " showed: " + ts_showResult);
-                            }
-
-                            if(recoverFrame) {
-                            }
-                        }
-                    } else {
-                        Points1 = Points2;
-                        bitmap1 = bitmap2;
-                    }
-
-                } else {
-                    Log.v(TAG, "too few tracking points, track again");
-                    InitializeNeeded = true;
-                }
-            } else {
-                PreGRAYMat = GRAYMat;
-            }
-
-            if (InitializeNeeded) {
-                Log.v(TAG, "get tracking points");
-                MatOfPoint initial = new MatOfPoint();
-                Imgproc.goodFeaturesToTrack(GRAYMat, initial, MAX_POINTS, 0.01, 10, new Mat(), 3, false, 0.04);
-                Points1 = new MatOfPoint2f(initial.toArray());
-                Imgproc.cornerSubPix(GRAYMat, Points1, subPixWinSize, new org.opencv.core.Size(-1, -1), termcrit);
-                trackingID++;
-
-                bitmap1 = new int[MAX_POINTS];
-                if (!EnableMultipleTracking || !PosterChanged) {
-                    for (int i = 0; i < Points1.rows(); i++)
-                        bitmap1[i] = 1;
-                } else {
-                    for (int i = 0; i < Markers1.Num; i++) {
-                        for (int j = 0; j < MAX_POINTS; j++) {
-                            if (isInside(new Point(Points1.get(j, 0)), Markers1.Recs[i])) {
-                                bitmap1[j] = Markers1.IDs[i];
-                                Markers1.TrackingPointsNums[i]++;
-                            }
-                        }
-                        Log.v(TAG, "Marker " + Markers1.IDs[i] + " points num: " + Markers1.TrackingPointsNums[i]);
-                    }
-                }
-
-                InitializeNeeded = false;
-            }
-
-            if (frmID % FREQUENCY == 10)
-                HistoryQueue.add(new HistoryTrackingPoints(frmID, trackingID, new MatOfPoint2f(Points1.clone()), bitmap1.clone()));
-
-            return null;
-        }
-
-        @Override
-        public void onPostExecute(Void result) {
-            if(Show2DView && frmID%30 == 1) mDraw.invalidate();
-            senderTskQueue.add(frmID%2);
-        }
-
-        private boolean isInside(Point point, Mat Rec) {
-            int i, j;
-            boolean result = false;
-
-            for (i = 0, j = 3; i < 4; j = i++) {
-                if ((Rec.get(i, 0)[1] > point.y) != (Rec.get(j, 0)[1] > point.y) &&
-                        (point.x < (Rec.get(j, 0)[0] - Rec.get(i, 0)[0]) * (point.y - Rec.get(i, 0)[1]) / (Rec.get(j, 0)[1] - Rec.get(i, 0)[1]) + Rec.get(i, 0)[0])) {
-                    result = !result;
-                }
-            }
-            return result;
         }
     }
 
@@ -714,22 +385,22 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         @Override
         protected Void doInBackground(byte[]... frmdata) {
             if(dataType == IMAGE_DETECT) {
-                YUVMatTrans.put(0, 0, frmdata[0]);
-                Imgproc.cvtColor(YUVMatTrans, BGRMat, Imgproc.COLOR_YUV420sp2BGR);
-                Imgproc.resize(BGRMat, BGRMatScaled, BGRMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
+                SharedMemory.YUVMatTrans.put(0, 0, frmdata[0]);
+                Imgproc.cvtColor(SharedMemory.YUVMatTrans, SharedMemory.BGRMat, Imgproc.COLOR_YUV420sp2BGR);
+                Imgproc.resize(SharedMemory.BGRMat, SharedMemory.BGRMatScaled, SharedMemory.BGRMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
             }
 
             if (dataType == IMAGE_DETECT) {
                 MatOfByte imgbuff = new MatOfByte();
-                Highgui.imencode(".jpg", BGRMatScaled, imgbuff, params);
+                Highgui.imencode(".jpg", SharedMemory.BGRMatScaled, imgbuff, params);
 
                 datasize = (int) (imgbuff.total() * imgbuff.channels());
                 frmdataToSend = new byte[datasize];
 
                 imgbuff.get(0, 0, frmdataToSend);
             } else if (dataType == TRACKPOINTS) {
-                Point[] points = Points1.toArray();
-                datasize = 8 * points.length + MAX_POINTS;
+                Point[] points = SharedMemory.Points1.toArray();
+                datasize = 8 * points.length + Constants.MAX_POINTS;
                 frmdataToSend = new byte[datasize];
                 byte[] tmp;
                 for (int i = 0; i < points.length; i++) {
@@ -738,7 +409,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                     tmp = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putFloat((float) points[i].y).array();
                     System.arraycopy(tmp, 0, frmdataToSend, i * 8 + 4, 4);
                 }
-                System.arraycopy(bitmap1, 0, frmdataToSend, datasize - MAX_POINTS, MAX_POINTS);
+                System.arraycopy(SharedMemory.bitmap1, 0, frmdataToSend, datasize - Constants.MAX_POINTS, Constants.MAX_POINTS);
             }  else if (dataType == MESSAGE_ECHO) {
                 datasize = 0;
                 frmdataToSend = null;
@@ -763,9 +434,9 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 Long tsLong = System.currentTimeMillis();
                 String ts_sendCameraFrame = tsLong.toString();
                 if(frmID <= 5)
-                    Log.d(Eval, "echo " + frmID + " sent: " + ts_sendCameraFrame);
+                    Log.d(Constants.Eval, "echo " + frmID + " sent: " + ts_sendCameraFrame);
                 else
-                    Log.d(Eval, "frame " + frmID + " sent: " + ts_sendCameraFrame);
+                    Log.d(Constants.Eval, "frame " + frmID + " sent: " + ts_sendCameraFrame);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -790,31 +461,31 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                     //Log.d(Eval, "received size: " + res.length);
                 }
                 else
-                    Log.v(TAG, "nothing received");
+                    Log.v(Constants.TAG, "nothing received");
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
             if (res != null) {
                 System.arraycopy(res, 0, tmp, 0, 4);
-                resID = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                SharedMemory.resID = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
                 System.arraycopy(res, 4, tmp, 0, 4);
                 newMarkerNum = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
                 Long tsLong = System.currentTimeMillis();
                 String ts_getResult = tsLong.toString();
 
-                if (resID <= 5) {
-                    Log.d(Eval, "echo " + resID + " received: " + ts_getResult);
-                } else if (resID == lastSentID) {
-                    Log.d(Eval, "res " + resID + " received: " + ts_getResult);
-                    Markers0 = new Markers(newMarkerNum);
+                if (SharedMemory.resID <= 5) {
+                    Log.d(Constants.Eval, "echo " + SharedMemory.resID + " received: " + ts_getResult);
+                } else if (SharedMemory.resID == SharedMemory.lastSentID) {
+                    Log.d(Constants.Eval, "res " + SharedMemory.resID + " received: " + ts_getResult);
+                    SharedMemory.Markers0 = new Markers(newMarkerNum);
 
                     for (int i = 0; i < newMarkerNum; i++) {
-                        Markers0.Recs[i] = new MatOfPoint2f();
-                        Markers0.Recs[i].alloc(4);
+                        SharedMemory.Markers0.Recs[i] = new MatOfPoint2f();
+                        SharedMemory.Markers0.Recs[i].alloc(4);
                         System.arraycopy(res, 8 + i * 100, tmp, 0, 4);
-                        Markers0.IDs[i] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                        SharedMemory.Markers0.IDs[i] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
                         for (int j = 0; j < 8; j++) {
                             System.arraycopy(res, 12 + i * 100 + j * 4, tmp, 0, 4);
@@ -822,28 +493,28 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                         }
                         for (int j = 0; j < 4; j++)
                             pointArray[j] = new Point(floatres[j * 2], floatres[j * 2 + 1]);
-                        Markers0.Recs[i].fromArray(pointArray);
+                        SharedMemory.Markers0.Recs[i].fromArray(pointArray);
 
                         System.arraycopy(res, 44 + i * 100, name, 0, 64);
                         String markerName = new String(name);
-                        Markers0.Names[i] = markerName.substring(0, markerName.indexOf("."));
+                        SharedMemory.Markers0.Names[i] = markerName.substring(0, markerName.indexOf("."));
                     }
 
-                    if (Markers1 != null)
-                        PosterChanged = !Arrays.equals(Markers1.IDs, Markers0.IDs);
+                    if (SharedMemory.Markers1 != null)
+                        SharedMemory.PosterChanged = !Arrays.equals(SharedMemory.Markers1.IDs, SharedMemory.Markers0.IDs);
                     else
-                        PosterChanged = true;
+                        SharedMemory.PosterChanged = true;
 
-                    if (!PosterChanged && Markers1 != null)
-                        Markers0.TrackingPointsNums = Markers1.TrackingPointsNums;
+                    if (!SharedMemory.PosterChanged && SharedMemory.Markers1 != null)
+                        SharedMemory.Markers0.TrackingPointsNums = SharedMemory.Markers1.TrackingPointsNums;
 
-                    InitializeNeeded = PosterChanged;
-                    PosterRecognized = true;
+                    SharedMemory.InitializeNeeded = SharedMemory.PosterChanged;
+                    SharedMemory.PosterRecognized = true;
 
-                    if(ShowGL && PosterChanged)
-                        ((PosterRenderer) mRenderer).onPosterChanged(Markers0);
+                    if(SharedMemory.ShowGL && SharedMemory.PosterChanged)
+                        ((PosterRenderer) mRenderer).onPosterChanged(SharedMemory.Markers0);
                 } else {
-                    Log.d(TAG, "discard outdate result: " + resID);
+                    Log.d(Constants.TAG, "discard outdate result: " + SharedMemory.resID);
                 }
             }
             return null;
@@ -886,27 +557,27 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             if (ShowFPS) {
                 if (true) {
                     time_n = (int) System.currentTimeMillis();
-                    fps = 1000 * (frmID - oldFrmID) / (time_n - time_o);
+                    fps = 1000 * (SharedMemory.frmID - SharedMemory.oldFrmID) / (time_n - time_o);
                     time_o = time_n;
-                    oldFrmID = frmID;
+                    SharedMemory.oldFrmID = SharedMemory.frmID;
                 }
                 canvas.drawText("fps: " + fps, 100, 50, paintWord);
             }
 
-            if (ShowEdge && Markers1 != null && Markers1.Num != 0) {
+            if (ShowEdge && SharedMemory.Markers1 != null && SharedMemory.Markers1.Num != 0) {
                 float[][] points = new float[4][2];
-                for (int i = 0; i < Markers1.Num; i++) {
+                for (int i = 0; i < SharedMemory.Markers1.Num; i++) {
                     for (int j = 0; j < 4; j++)
-                        Markers1.Recs[i].get(j, 0, points[j]);
+                        SharedMemory.Markers1.Recs[i].get(j, 0, points[j]);
                     for (int j = 0; j < 4; j++)
                         canvas.drawLine(dispScale * points[j][0], dispScale * points[j][1], dispScale * points[(j + 1) % 4][0], dispScale * points[(j + 1) % 4][1], paintLine);
                     if(ShowName)
-                        canvas.drawText(Markers1.Names[i], dispScale * points[0][0] + 400, dispScale * points[0][1] + 200, paintWord);
+                        canvas.drawText(SharedMemory.Markers1.Names[i], dispScale * points[0][0] + 400, dispScale * points[0][1] + 200, paintWord);
                 }
             }
 
-            if (ShowPoints && Points1 != null) {
-                Point[] points = Points1.toArray();
+            if (ShowPoints && SharedMemory.Points1 != null) {
+                Point[] points = SharedMemory.Points1.toArray();
                 for (int i = 0; i < points.length; i++) {
                     canvas.drawCircle(dispScale * (float) points[i].x, dispScale * (float) points[i].y, 5, paintPoint);
                 }
