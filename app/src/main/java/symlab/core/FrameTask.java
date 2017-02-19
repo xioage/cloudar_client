@@ -2,6 +2,7 @@ package symlab.core;
 
 import android.os.AsyncTask;
 import android.util.Log;
+import android.util.Pair;
 import android.view.SurfaceHolder;
 
 import org.opencv.calib3d.Calib3d;
@@ -17,6 +18,9 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.video.Video;
 import org.rajawali3d.renderer.Renderer;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import symlab.cloudridar.HistoryTrackingPoints;
 import symlab.cloudridar.PosterRenderer;
 
@@ -31,9 +35,7 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
 
     private int frmID;
     private HistoryTrackingPoints curHistory;
-    private MatOfPoint2f Points2;
     private MatOfPoint2f[] Recs2;
-    private int[] bitmap2;
     private MatOfPoint2f[] subHistoryPoints, subPoints1, subPoints2;
     private MatOfPoint2f scenePoints;
     private Mat rvec, tvec;
@@ -49,16 +51,57 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
         this.mRenderer = renderer;
     }
 
+
+    private Mat procGrayImg(byte[] frmdata){
+        SharedMemory.YUVMatTrack.put(0, 0, frmdata);
+        Imgproc.resize(SharedMemory.YUVMatTrack, SharedMemory.YUVMatScaled, SharedMemory.YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
+        Mat GRAYMat = new Mat(Constants.previewHeight / Constants.scale, Constants.previewWidth / Constants.scale, CvType.CV_8UC1);
+        Imgproc.cvtColor(SharedMemory.YUVMatScaled, GRAYMat, Imgproc.COLOR_YUV2GRAY_420);
+
+        return GRAYMat;
+    }
+
+    private Pair<MatOfPoint2f, MatOfPoint2f> traceFeaturePoint(Mat pre, Mat next, MatOfPoint2f prePoint, int[] bitmap){
+        MatOfByte status = new MatOfByte();
+        MatOfFloat err = new MatOfFloat();
+        MatOfPoint2f nextPoint = new MatOfPoint2f();
+        Video.calcOpticalFlowPyrLK(pre, next, prePoint, nextPoint, status, err, Constants.winSize, 3, Constants.termcrit, 0, 0.001);
+
+        byte[] statusArray = status.toArray();
+        int totalValid = 0;
+        for (int x : statusArray) totalValid += x;
+
+        MatOfPoint2f refinedPrePoint = new MatOfPoint2f(prePoint.rowRange(0, totalValid));
+        MatOfPoint2f refinedNextPoint = new MatOfPoint2f(nextPoint.rowRange(0, totalValid));
+
+        int iterator = 0, refinedCount = 0;
+        for (int i=0; i<Constants.MAX_POINTS; i++){ //计算剩下的枚举器
+            if (bitmap[i] == 1){ //上一帧中的还有效
+                if (statusArray[iterator] == 1){ //当前帧也有效
+                    refinedPrePoint.put(refinedCount, 0, prePoint.get(iterator, 0));
+                    refinedNextPoint.put(refinedCount, 0, nextPoint.get(iterator, 0));
+                    refinedCount++;
+
+                    if (SharedMemory.EnableMultipleTracking) bitmap[i] = bitmap[i];
+                    else bitmap[i] = 1;
+                } else { //已经消失了
+                    bitmap[i] = 0;
+                }
+                iterator++; //下一对特征点
+                if (iterator == statusArray.length) break;
+            }
+        }
+
+        return new Pair(refinedPrePoint, refinedNextPoint);
+    }
+
     @Override
     protected Void doInBackground(byte[]... frmdata) {
         //Long tsLong = System.currentTimeMillis();
         //String ts_getCameraFrame = tsLong.toString();
         //Log.d(Eval, "get frame " + frmID + " data: " + ts_getCameraFrame);
 
-        SharedMemory.YUVMatTrack.put(0, 0, frmdata[0]);
-        Imgproc.resize(SharedMemory.YUVMatTrack, SharedMemory.YUVMatScaled, SharedMemory.YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-        Mat GRAYMat = new Mat(Constants.previewHeight / Constants.scale, Constants.previewWidth / Constants.scale, CvType.CV_8UC1);
-        Imgproc.cvtColor(SharedMemory.YUVMatScaled, GRAYMat, Imgproc.COLOR_YUV2GRAY_420);
+        Mat GRAYMat = procGrayImg(frmdata[0]);
 
         //tsLong = System.currentTimeMillis();
         //String ts_resize = tsLong.toString();
@@ -70,48 +113,21 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
             recoverFrame = true;
         }
 
-        if (SharedMemory.Points1 != null) {
-            MatOfByte status = new MatOfByte();
-            MatOfFloat err = new MatOfFloat();
-            Points2 = new MatOfPoint2f();
-            Video.calcOpticalFlowPyrLK(SharedMemory.PreGRAYMat, GRAYMat, SharedMemory.Points1, Points2, status, err, Constants.winSize, 3, Constants.termcrit, 0, 0.001);
+        if (SharedMemory.Points1 != null) { //前一帧有feature
+            Pair<MatOfPoint2f, MatOfPoint2f> result = traceFeaturePoint(SharedMemory.PreGRAYMat, GRAYMat, SharedMemory.Points1, SharedMemory.bitmap1);
+            MatOfPoint2f prePoints = result.first;
+            MatOfPoint2f nextPoints = result.second;
+
+            int count = prePoints.rows();
+
             SharedMemory.PreGRAYMat = GRAYMat;
             //tsLong = System.currentTimeMillis();
             //String ts_getPoints = tsLong.toString();
             //Log.d(Eval, "get points " + frmID + " :" + ts_getPoints);
 
-            bitmap2 = new int[Constants.MAX_POINTS];
-            int i, k, j;
-            for (i = k = j = 0; i < Points2.rows(); i++) {
-                while (j < Constants.MAX_POINTS && SharedMemory.bitmap1[j] == 0)
-                    j++;
+            Log.v(Constants.TAG, "tracking points left: " + count);
 
-                if (j == Constants.MAX_POINTS)
-                    break;
-
-                if (status.toArray()[i] == 0) {
-                    j++;
-                    continue;
-                }
-
-                if (k != i) {
-                    SharedMemory.Points1.put(k, 0, SharedMemory.Points1.get(i, 0));
-                    Points2.put(k, 0, Points2.get(i, 0));
-                }
-                k++;
-                if (SharedMemory.EnableMultipleTracking)
-                    bitmap2[j] = SharedMemory.bitmap1[j];
-                else
-                    bitmap2[j] = 1;
-                j++;
-            }
-            if (k != SharedMemory.Points1.rows())
-                SharedMemory.Points1 = new MatOfPoint2f(SharedMemory.Points1.rowRange(0, k));
-            if (k != Points2.rows())
-                Points2 = new MatOfPoint2f(Points2.rowRange(0, k));
-            Log.v(Constants.TAG, "tracking points left: " + k);
-
-            if (k > 4) {
+            if (count > 4) {
                 if (SharedMemory.Markers1 != null && SharedMemory.Markers1.Num != 0) {
                     if (recoverFrame) {
                         //Log.d(TAG, "frm " + frmID + " recover from " + resID);
@@ -122,10 +138,12 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
 
                         if (curHistory.HistoryTrackingID == SharedMemory.trackingID) {
 
+
+                            int i, j, k;
                             for (i = k = j = 0; i < curHistory.HistoryPoints.rows(); i++) {
                                 while (curHistory.historybitmap[j] == 0) j++;
 
-                                if (bitmap2[j] == 0) {
+                                if (SharedMemory.bitmap1[j] == 0) {
                                     j++;
                                     continue;
                                 }
@@ -136,7 +154,7 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
                             curHistory.HistoryPoints = new MatOfPoint2f(curHistory.HistoryPoints.rowRange(0, k));
 
                             if (!SharedMemory.EnableMultipleTracking || SharedMemory.PosterChanged) {
-                                Mat H = Calib3d.findHomography(curHistory.HistoryPoints, Points2, Calib3d.RANSAC, 3);
+                                Mat H = Calib3d.findHomography(curHistory.HistoryPoints, nextPoints, Calib3d.RANSAC, 3);
                                 for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
                                     SharedMemory.Markers1.Homographys[m] = H;
                                 }
@@ -146,11 +164,11 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
                                 for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
                                     subHistoryPoints[m] = new MatOfPoint2f(new Mat(SharedMemory.Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
                                     subPoints2[m] = new MatOfPoint2f(new Mat(SharedMemory.Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                    int count = 0;
-                                    for (int n = 0; n < Points2.rows(); n++) {
-                                        if (bitmap2[n] == SharedMemory.Markers1.IDs[m]) {
+                                    count = 0;
+                                    for (int n = 0; n < nextPoints.rows(); n++) {
+                                        if (SharedMemory.bitmap1[n] == SharedMemory.Markers1.IDs[m]) {
                                             subHistoryPoints[m].put(count, 0, curHistory.HistoryPoints.get(n, 0));
-                                            subPoints2[m].put(count++, 0, Points2.get(n, 0));
+                                            subPoints2[m].put(count++, 0, nextPoints.get(n, 0));
                                         }
                                     }
                                     SharedMemory.Markers1.Homographys[m] = Calib3d.findHomography(subHistoryPoints[m], subPoints2[m], Calib3d.RANSAC, 3);
@@ -167,25 +185,24 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
                             for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
                                 subPoints1[m] = new MatOfPoint2f(new Mat(SharedMemory.Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
                                 subPoints2[m] = new MatOfPoint2f(new Mat(SharedMemory.Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                int count = 0;
-                                for (int n = 0; n < Points2.rows(); n++) {
-                                    if (bitmap2[n] == SharedMemory.Markers1.IDs[m]) {
-                                        subPoints1[m].put(count, 0, SharedMemory.Points1.get(n, 0));
-                                        subPoints2[m].put(count++, 0, Points2.get(n, 0));
+                                count = 0;
+                                for (int n = 0; n < nextPoints.rows(); n++) {
+                                    if (SharedMemory.bitmap1[n] == SharedMemory.Markers1.IDs[m]) {
+                                        subPoints1[m].put(count, 0, prePoints.get(n, 0));
+                                        subPoints2[m].put(count++, 0, nextPoints.get(n, 0));
                                     }
                                 }
                                 SharedMemory.Markers1.Homographys[m] = Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3);
                             }
                         } else {
-                            Mat H = Calib3d.findHomography(SharedMemory.Points1, Points2, Calib3d.RANSAC, 3);
+                            Mat H = Calib3d.findHomography(prePoints, nextPoints, Calib3d.RANSAC, 3);
                             for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
                                 SharedMemory.Markers1.Homographys[m] = H;
                             }
                         }
                     }
 
-                    SharedMemory.Points1 = Points2;
-                    SharedMemory.bitmap1 = bitmap2;
+                    SharedMemory.Points1 = nextPoints;
 
                     Recs2 = new MatOfPoint2f[SharedMemory.Markers1.Num];
                     for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
@@ -250,8 +267,7 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
                         }
                     }
                 } else {
-                    SharedMemory.Points1 = Points2;
-                    SharedMemory.bitmap1 = bitmap2;
+                    SharedMemory.Points1 = nextPoints;
                 }
 
             } else {
@@ -315,31 +331,6 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
         return result;
     }
 
-    private void refineFeature(){
-        /*
-
-        int iterator = 0, count = 0;
-        bitmap2 = new int[MAX_POINTS];
-        byte[] statusArray = status.toArray();
-        for (int i=0; i<MAX_POINTS; i++){ //计算剩下的枚举器
-            if (bitmap1[i] == 1){ //上一帧中的还有效
-                if (statusArray[iterator] == 1){ //当前帧也有效
-                    Points1.put(count, 0, Points1.get(iterator, 0));
-                    Points2.put(count, 0, Points2.get(iterator, 0));
-                    count++;
-
-                    if (EnableMultipleTracking) bitmap2[i] = bitmap1[i];
-                    else bitmap2[i] = 1;
-                }
-                iterator++; //下一对特征点
-            }
-        }
-        if (count != Points1.rows()){
-            Points1 = new MatOfPoint2f(Points1.rowRange(0, count));
-            Points2 = new MatOfPoint2f(Points2.rowRange(0, count));
-        }
-    */
-    }
 
     private CallbackListener listener;
 
