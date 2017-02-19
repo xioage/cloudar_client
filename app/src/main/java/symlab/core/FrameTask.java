@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import symlab.cloudridar.HistoryTrackingPoints;
+import symlab.cloudridar.Markers;
 import symlab.cloudridar.PosterRenderer;
 
 /**
@@ -36,7 +37,6 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
     private int frmID;
     private HistoryTrackingPoints curHistory;
     private MatOfPoint2f[] Recs2;
-    private MatOfPoint2f[] subHistoryPoints, subPoints1, subPoints2;
     private MatOfPoint2f scenePoints;
     private Mat rvec, tvec;
     private Mat rotation;
@@ -76,8 +76,8 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
 
         int iterator = 0, refinedCount = 0;
         for (int i=0; i<Constants.MAX_POINTS; i++){ //计算剩下的枚举器
-            if (bitmap[i] == 1){ //上一帧中的还有效
-                if (statusArray[iterator] == 1){ //当前帧也有效
+            if (bitmap[i] != 0){ //上一帧中的还有效
+                if (statusArray[iterator] != 0){ //当前帧也有效
                     refinedPrePoint.put(refinedCount, 0, prePoint.get(iterator, 0));
                     refinedNextPoint.put(refinedCount, 0, nextPoint.get(iterator, 0));
                     refinedCount++;
@@ -93,6 +93,45 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
         }
 
         return new Pair(refinedPrePoint, refinedNextPoint);
+    }
+
+    private MatOfPoint2f refineFeaturePoint(int[] standardBitmap, int totalValid, int[] oldBitmap, MatOfPoint2f oldFeaturePoint){
+        MatOfPoint2f refinedFeature = new MatOfPoint2f(oldFeaturePoint.rowRange(0, totalValid));
+
+        int iterator = 0, refinedCount = 0;
+        for (int i=0; i<Constants.MAX_POINTS; i++){
+            if (oldBitmap[i] != 0){ //旧的还有效
+                if (standardBitmap[i] != 0){ //现在还有效
+                    refinedFeature.put(refinedCount, 0, oldFeaturePoint.get(iterator, 0));
+                    refinedCount++;
+                }
+                iterator++;
+            }
+            oldBitmap[i] = standardBitmap[i];
+        }
+        return refinedFeature;
+    }
+
+    private void findHomography(MatOfPoint2f oldFeatures, MatOfPoint2f nowFeatures, int[] bitmap, Markers markers, boolean enableMultiple){
+        if (!enableMultiple) {
+            Mat homography = Calib3d.findHomography(oldFeatures, nowFeatures, Calib3d.RANSAC, 3);
+            for (int m = 0; m < markers.Num; m++) markers.Homographys[m] = homography;
+        } else {
+            MatOfPoint2f[] subPoints1 = new MatOfPoint2f[markers.Num];
+            MatOfPoint2f[] subPoints2 = new MatOfPoint2f[markers.Num];
+            for (int m = 0; m < markers.Num; m++) {
+                subPoints1[m] = new MatOfPoint2f(new Mat(markers.TrackingPointsNums[m], 1, CvType.CV_32FC2));
+                subPoints2[m] = new MatOfPoint2f(new Mat(markers.TrackingPointsNums[m], 1, CvType.CV_32FC2));
+                int count = 0;
+                for (int n = 0; n < nowFeatures.rows(); n++) {
+                    if (bitmap[n] == markers.IDs[m]) {
+                        subPoints1[m].put(count, 0, oldFeatures.get(n, 0));
+                        subPoints2[m].put(count++, 0, nowFeatures.get(n, 0));
+                    }
+                }
+                markers.Homographys[m] = Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3);
+            }
+        }
     }
 
     @Override
@@ -129,7 +168,7 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
 
             if (count > 4) {
                 if (SharedMemory.Markers1 != null && SharedMemory.Markers1.Num != 0) {
-                    if (recoverFrame) {
+                    if (recoverFrame) { //服务器返回，校准homography
                         //Log.d(TAG, "frm " + frmID + " recover from " + resID);
 
                         do {
@@ -137,69 +176,15 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
                         } while (curHistory.HistoryFrameID != SharedMemory.resID);
 
                         if (curHistory.HistoryTrackingID == SharedMemory.trackingID) {
-
-
-                            int i, j, k;
-                            for (i = k = j = 0; i < curHistory.HistoryPoints.rows(); i++) {
-                                while (curHistory.historybitmap[j] == 0) j++;
-
-                                if (SharedMemory.bitmap1[j] == 0) {
-                                    j++;
-                                    continue;
-                                }
-
-                                curHistory.HistoryPoints.put(k++, 0, curHistory.HistoryPoints.get(i, 0));
-                                j++;
-                            }
-                            curHistory.HistoryPoints = new MatOfPoint2f(curHistory.HistoryPoints.rowRange(0, k));
-
-                            if (!SharedMemory.EnableMultipleTracking || SharedMemory.PosterChanged) {
-                                Mat H = Calib3d.findHomography(curHistory.HistoryPoints, nextPoints, Calib3d.RANSAC, 3);
-                                for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
-                                    SharedMemory.Markers1.Homographys[m] = H;
-                                }
-                            } else {
-                                subHistoryPoints = new MatOfPoint2f[SharedMemory.Markers1.Num];
-                                subPoints2 = new MatOfPoint2f[SharedMemory.Markers1.Num];
-                                for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
-                                    subHistoryPoints[m] = new MatOfPoint2f(new Mat(SharedMemory.Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                    subPoints2[m] = new MatOfPoint2f(new Mat(SharedMemory.Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                    count = 0;
-                                    for (int n = 0; n < nextPoints.rows(); n++) {
-                                        if (SharedMemory.bitmap1[n] == SharedMemory.Markers1.IDs[m]) {
-                                            subHistoryPoints[m].put(count, 0, curHistory.HistoryPoints.get(n, 0));
-                                            subPoints2[m].put(count++, 0, nextPoints.get(n, 0));
-                                        }
-                                    }
-                                    SharedMemory.Markers1.Homographys[m] = Calib3d.findHomography(subHistoryPoints[m], subPoints2[m], Calib3d.RANSAC, 3);
-                                }
-                            }
+                            curHistory.HistoryPoints = refineFeaturePoint(SharedMemory.bitmap1, count, curHistory.historybitmap, curHistory.HistoryPoints);
+                            boolean enableMultiple = SharedMemory.EnableMultipleTracking && !SharedMemory.PosterChanged;
+                            findHomography(curHistory.HistoryPoints, nextPoints, SharedMemory.bitmap1, SharedMemory.Markers1, enableMultiple);
                         } else {
                             Log.e(Constants.TAG, "tried to recover from late result, tracking points not match");
                         }
-                    } else {
-                        if (SharedMemory.EnableMultipleTracking) {
-                            subPoints1 = new MatOfPoint2f[SharedMemory.Markers1.Num];
-                            subPoints2 = new MatOfPoint2f[SharedMemory.Markers1.Num];
-
-                            for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
-                                subPoints1[m] = new MatOfPoint2f(new Mat(SharedMemory.Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                subPoints2[m] = new MatOfPoint2f(new Mat(SharedMemory.Markers1.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                                count = 0;
-                                for (int n = 0; n < nextPoints.rows(); n++) {
-                                    if (SharedMemory.bitmap1[n] == SharedMemory.Markers1.IDs[m]) {
-                                        subPoints1[m].put(count, 0, prePoints.get(n, 0));
-                                        subPoints2[m].put(count++, 0, nextPoints.get(n, 0));
-                                    }
-                                }
-                                SharedMemory.Markers1.Homographys[m] = Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3);
-                            }
-                        } else {
-                            Mat H = Calib3d.findHomography(prePoints, nextPoints, Calib3d.RANSAC, 3);
-                            for (int m = 0; m < SharedMemory.Markers1.Num; m++) {
-                                SharedMemory.Markers1.Homographys[m] = H;
-                            }
-                        }
+                    } else { //本地校准homography
+                        boolean enableMultiple = SharedMemory.EnableMultipleTracking && !SharedMemory.PosterChanged;
+                        findHomography(prePoints, nextPoints, SharedMemory.bitmap1, SharedMemory.Markers1, enableMultiple);
                     }
 
                     SharedMemory.Points1 = nextPoints;
