@@ -39,6 +39,7 @@ public class Constants {
 
     static public final boolean EnableMultipleTracking = false;
     static public final boolean ShowGL = true;
+    static public final boolean Show2DView = true;
 
     static public final MatOfDouble distCoeffs = new MatOfDouble();
     static public final Mat cameraMatrix = new Mat(3, 3, CvType.CV_64FC1);

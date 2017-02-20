@@ -6,10 +6,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.hardware.Camera;
-import android.hardware.Camera.Size;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
@@ -18,51 +16,18 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 
-import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.OpenCVLoader;
-import org.opencv.calib3d.Calib3d;
-import org.opencv.core.Core;
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfByte;
-import org.opencv.core.MatOfDouble;
-import org.opencv.core.MatOfFloat;
-import org.opencv.core.MatOfInt;
-import org.opencv.core.MatOfPoint;
-import org.opencv.core.MatOfPoint2f;
-import org.opencv.core.MatOfPoint3f;
 import org.opencv.core.Point;
-import org.opencv.core.Point3;
-import org.opencv.core.TermCriteria;
-import org.opencv.features2d.FeatureDetector;
-import org.opencv.highgui.Highgui;
-import org.opencv.imgproc.Imgproc;
-import org.opencv.video.Video;
-import org.rajawali3d.renderer.ISurfaceRenderer;
 import org.rajawali3d.view.ISurface;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.net.SocketAddress;
-import java.net.UnknownHostException;
 import java.nio.channels.DatagramChannel;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.Queue;
 
 import symlab.core.ArManager;
 import symlab.core.Constants;
-import symlab.core.SharedMemory;
 import symlab.core.adapter.RenderAdapter;
 
 
@@ -133,13 +98,12 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         ip = "104.199.140.59";
         portNum = 51717;
 
-        SharedMemory.initMemory();
-        if (SharedMemory.Show2DView) {
+        if (Constants.Show2DView) {
             mDraw = new DrawOnTop(this);
             addContentView(mDraw, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
 
-        if (SharedMemory.ShowGL) {
+        if (Constants.ShowGL) {
             mRenderSurface = (ISurface) findViewById(R.id.rajwali_surface);
             mRenderer = new PosterRenderer(this, Constants.scale);
             mRenderSurface.setSurfaceRenderer(mRenderer);
@@ -181,15 +145,12 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         Log.i(Constants.TAG, " onResume() called.");
         super.onResume();
         mCamera = Camera.open();
-        SharedMemory.glViewMatrixData = new double[16];
-        SharedMemory.Markers0 = null;
-        SharedMemory.Markers1 = null;
     }
 
     @Override
     public void onPause() {
         Log.i(Constants.TAG, " onPause() called.");
-        if (SharedMemory.ShowGL)
+        if (Constants.ShowGL)
             ((PosterRenderer) mRenderer).onActivityPause();
 
         if (mInPreview)
@@ -223,7 +184,7 @@ public class MainActivity extends Activity implements View.OnTouchListener {
     @Override
     public boolean onTouch(View v, MotionEvent event) {
         Log.d(Constants.TAG, "touch event");
-        if (SharedMemory.ShowGL && event.getAction() == MotionEvent.ACTION_DOWN) {
+        if (Constants.ShowGL && event.getAction() == MotionEvent.ACTION_DOWN) {
             ((PosterRenderer) mRenderer).getObjectAt(event.getX(), event.getY());
         }
 
@@ -288,7 +249,10 @@ public class MainActivity extends Activity implements View.OnTouchListener {
 
             ArManager.getInstance().driveFrame(data);
             count++;
-            if (count % 30 == 1) mDraw.invalidate();
+            if (count % 30 == 1) {
+                mDraw.updateData(ArManager.getInstance().frameSnapshot());
+                mDraw.invalidate();
+            }
         }
     };
 
@@ -365,20 +329,25 @@ public class MainActivity extends Activity implements View.OnTouchListener {
             paintWord.setTextSize(50);
         }
 
+        private int preFrameID;
+
+        public void updateData(int frameID){
+            if (ShowFPS) {
+                time_n = (int) System.currentTimeMillis();
+                fps = 1000 * (frameID - preFrameID) / (time_n - time_o);
+                time_o = time_n;
+                preFrameID = frameID;
+            }
+        }
+
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
 
             if (ShowFPS) {
-                if (true) {
-                    time_n = (int) System.currentTimeMillis();
-                    fps = 1000 * (SharedMemory.frmID - SharedMemory.oldFrmID) / (time_n - time_o);
-                    time_o = time_n;
-                    SharedMemory.oldFrmID = SharedMemory.frmID;
-                }
                 canvas.drawText("fps: " + fps, 100, 50, paintWord);
             }
-
+/*
             if (ShowEdge && SharedMemory.Markers1 != null && SharedMemory.Markers1.Num != 0) {
                 float[][] points = new float[4][2];
                 for (int i = 0; i < SharedMemory.Markers1.Num; i++) {
@@ -397,7 +366,10 @@ public class MainActivity extends Activity implements View.OnTouchListener {
                     canvas.drawCircle(dispScale * (float) points[i].x, dispScale * (float) points[i].y, 5, paintPoint);
                 }
             }
+            */
         }
+
     }
+
 }
 

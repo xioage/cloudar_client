@@ -3,6 +3,7 @@ package symlab.core;
 import android.content.Context;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.util.Log;
 
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
@@ -102,4 +103,7 @@ public class ArManager {
         handlerNetwork.post(this.taskReceiving);
     }
 
+    public int frameSnapshot(){
+        return frameID;
+    }
 }

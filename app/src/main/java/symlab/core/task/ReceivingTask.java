@@ -4,6 +4,7 @@ import android.util.Log;
 
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.rajawali3d.loader.LoaderGCode;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -47,8 +48,10 @@ public class ReceivingTask implements Runnable{
             if (datagramChannel.receive(resPacket) != null) {
                 res = resPacket.array();
                 //Log.d(Eval, "received size: " + res.length);
-            } else
+            } else {
                 Log.v(Constants.TAG, "nothing received");
+                res = null;
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -86,6 +89,7 @@ public class ReceivingTask implements Runnable{
                     String markerName = new String(name);
                     markers.Names[i] = markerName.substring(0, markerName.indexOf("."));
                 }
+
 
                 if (callback != null){
                     callback.onReceive(resultID, markers);

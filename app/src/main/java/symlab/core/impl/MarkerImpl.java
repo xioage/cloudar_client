@@ -46,7 +46,6 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         handler.post(new Runnable() {
             @Override
             public void run() {
-
                 boolean markersChanged = false;
                 if (MarkerImpl.this.markers != null)
                    markersChanged = !Arrays.equals(MarkerImpl.this.markers.IDs, markers.IDs);
@@ -154,7 +153,6 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         handler.post(new Runnable() {
             @Override
             public void run() {
-
                 if (preFeature == null){
                     trackingID++;
                 } else {
@@ -173,6 +171,7 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
                             } else {
                                 Log.e(Constants.TAG, "tried to recover from late result, tracking points not match");
                             }
+                            newMarkerFlag = false;
                         }
 
                         boolean viewReady = false;

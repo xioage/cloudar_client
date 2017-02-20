@@ -167,7 +167,7 @@ public class FrameTrackingTask implements Runnable{
 
                 resultFeature = nextPoints;
                 resultBitmap = bitmap;
-                resultPreFeature = preFeature;
+                resultPreFeature = prePoints;
             }
         }
         if (callback != null)
