@@ -3,6 +3,7 @@ package symlab.core.impl;
 import android.graphics.Bitmap;
 import android.os.Handler;
 import android.util.Log;
+import android.widget.Adapter;
 
 import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
@@ -12,12 +13,14 @@ import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.MatOfPoint3f;
 import org.opencv.core.Point;
 
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
 
 import symlab.cloudridar.HistoryTrackingPoints;
 import symlab.cloudridar.Markers;
 import symlab.core.Constants;
+import symlab.core.adapter.RenderAdapter;
 import symlab.core.task.FrameTrackingTask;
 
 /**
@@ -43,6 +46,18 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         handler.post(new Runnable() {
             @Override
             public void run() {
+
+                boolean markersChanged = false;
+                if (MarkerImpl.this.markers != null)
+                   markersChanged = !Arrays.equals(MarkerImpl.this.markers.IDs, markers.IDs);
+                else
+                   markersChanged = true;
+
+                if (!markersChanged && MarkerImpl.this.markers != null)
+                    markers.TrackingPointsNums = MarkerImpl.this.markers.TrackingPointsNums;
+
+                if (markersChanged && adapter != null) adapter.onMarkerChanged(markers);
+
                 newMarkerFlag = true;
                 MarkerImpl.this.markers = markers;
                 MarkerImpl.this.resultID = resultID;
@@ -181,7 +196,7 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
 
                             if(false == isInsideViewport(scenePoints)) {
                                 Log.d(Constants.TAG, "marker out of view, lost tracking");
-                                if (callback != null) callback.onClear();
+                                if (adapter != null) adapter.onMarkerChanged(null);
                             }
                             else {
                                 Mat rvec = new Mat();
@@ -204,7 +219,7 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
                                 for (int col = 0; col < 4; col++)
                                     for (int row = 0; row < 4; row++)
                                         glViewMatrixData[col * 4 + row] = viewMatrix.get(row, col)[0];
-                                if (callback != null) callback.onRender(glViewMatrixData);
+                                if (adapter != null) adapter.onRender(glViewMatrixData);
 
                                 //tsLong = System.currentTimeMillis();
                                 //String ts_showResult = tsLong.toString();
@@ -241,15 +256,22 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         return bitmap;
     }
 
+
+    private RenderAdapter adapter;
+
+    public void setRenderAdapter(RenderAdapter adapter){
+        this.adapter = adapter;
+    }
+
     private Callback callback;
 
     public void setCallback(Callback callback) {
         this.callback = callback;
     }
 
-    interface Callback {
-        void onRender(double[] glViewMatrix);
-        void onClear();
+
+    public interface Callback {
         void onSample(int frameId, byte[] frameData);
     }
+
 }

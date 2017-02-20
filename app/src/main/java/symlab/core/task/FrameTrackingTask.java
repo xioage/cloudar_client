@@ -19,6 +19,7 @@ import java.util.Queue;
 
 import symlab.cloudridar.Markers;
 import symlab.core.Constants;
+import symlab.core.model.SerialModel;
 
 /**
  * Created by st0rm23 on 2017/2/20.
@@ -30,52 +31,22 @@ public class FrameTrackingTask implements Runnable{
     private int frameID;
     private boolean busy;
 
-    private Mat YUVMatTrack, YUVMatTrans, YUVMatScaled;
-    private Mat BGRMat, BGRMatScaled;
-    private Mat PreGRAYMat;
+    private Mat YUVMatTrack, YUVMatScaled;
 
     private static boolean EnableMultipleTracking = false;
-
-    private class SerialModel<T>{
-        public int id;
-        public T value;
-
-        public boolean update(int id, T value){
-            int tmp = id - 1;
-            if (tmp != this.id) return false;
-            this.value = value;
-            this.id = id;
-            return true;
-        }
-
-        public void blockingUpdate(int id, T value){
-            int tmp = id - 1;
-            while (tmp != this.id);
-            this.value = value;
-            this.id = id;
-        }
-
-        public T getValue(){
-            return this.value;
-        }
-
-        public T blockingGetValue(int id){
-            int tmp = id;
-            while (tmp != this.id);
-            return value;
-        }
-    }
 
     private static SerialModel<int[]> serialBitmap;
     private static SerialModel<MatOfPoint2f> serialFeature;
     private static SerialModel<Mat> serialGRAYMat;
 
     public FrameTrackingTask(){
+        frameID = 0;
+        busy = false;
         YUVMatTrack = new Mat(Constants.previewHeight + Constants.previewHeight / 2, Constants.previewWidth, CvType.CV_8UC1);
-        YUVMatTrans = new Mat(Constants.previewHeight + Constants.previewHeight / 2, Constants.previewWidth, CvType.CV_8UC1);
         YUVMatScaled = new Mat((Constants.previewHeight + Constants.previewHeight / 2) / Constants.scale, Constants.previewWidth / Constants.scale, CvType.CV_8UC1);
-        BGRMat = new Mat(Constants.previewHeight, Constants.previewWidth, CvType.CV_8UC3);
-        BGRMatScaled = new Mat(Constants.previewHeight / Constants.scale, Constants.previewWidth / Constants.scale, CvType.CV_8UC3);
+        serialBitmap = new SerialModel<>(frameID, null);
+        serialFeature = new SerialModel<>(frameID, null);
+        serialGRAYMat = new SerialModel<>(frameID, null);
     }
 
     public boolean isBusy(){

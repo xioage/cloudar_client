@@ -4,8 +4,15 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.HandlerThread;
 
+import java.net.SocketAddress;
+import java.nio.channels.DatagramChannel;
+
 import symlab.cloudridar.Markers;
+import symlab.core.adapter.RenderAdapter;
+import symlab.core.impl.MarkerImpl;
 import symlab.core.task.FrameTrackingTask;
+import symlab.core.task.ReceivingTask;
+import symlab.core.task.TransmissionTask;
 
 /**
  * Created by st0rm23 on 2017/2/18.
@@ -14,20 +21,21 @@ import symlab.core.task.FrameTrackingTask;
 public class ArManager {
 
     static private ArManager instance;
-    private Context context;
 
     private final int FRAME_THREAD_SIZE = 2;
 
-    private HandlerThread mRenderThread;
-    private HandlerThread[] mFrameThread;
-    private HandlerThread mUtilThread;
-
-    private Handler handlerRender;
     private Handler handlerUtil;
+    private Handler handlerNetwork;
     private Handler[] handlerFrame;
-    private FrameTrackingTask[] taskFrame;
 
-    private int frameID;
+    private FrameTrackingTask[] taskFrame;
+    private ReceivingTask taskReceiving;
+    private TransmissionTask taskTransmission;
+    private DatagramChannel dataChannel;
+    private SocketAddress serverAddr;
+    private MarkerImpl markerManager;
+
+    private int frameID = 0;
 
     private ArManager(){ super(); }
 
@@ -38,51 +46,60 @@ public class ArManager {
         return instance;
     }
 
-    public void init(Context context){
-        this.context = context;
+    private Handler createAndStartThread(String name){
+        HandlerThread handlerThread = new HandlerThread(name);
+        handlerThread.start();
+        return new Handler(handlerThread.getLooper());
+    }
 
-        //start render thread
-        this.mRenderThread = new HandlerThread("render thread");
-        this.mRenderThread.start();
-        this.handlerRender = new Handler(mRenderThread.getLooper());
+    public void init(DatagramChannel datagramChannel, SocketAddress socketAddress, RenderAdapter renderAdapter){
 
-        //start util thread
-        this.mUtilThread = new HandlerThread("util thread");
-        this.mUtilThread.start();
-        this.handlerUtil = new Handler(mUtilThread.getLooper());
+        this.handlerUtil = createAndStartThread("util thread");//start util thread
+        this.handlerNetwork = createAndStartThread("network thread");
 
-        //start frame processing thread
-        this.mFrameThread = new HandlerThread[FRAME_THREAD_SIZE];
+
+        markerManager = new MarkerImpl(handlerUtil);
+
+        this.handlerFrame = new Handler[FRAME_THREAD_SIZE];
         this.taskFrame = new FrameTrackingTask[FRAME_THREAD_SIZE];
-        for (int i = 0; i< FRAME_THREAD_SIZE; i++){
-            mFrameThread[i] = new HandlerThread( String.format("frame thread %d", i));
-            mFrameThread[i].start();
-            handlerFrame[i] = new Handler(mFrameThread[i].getLooper());
+        for (int i = 0; i< FRAME_THREAD_SIZE; i++){ //start frame processing thread
+            this.handlerFrame[i] = createAndStartThread(String.format("frame thread %d", i));
             taskFrame[i] = new FrameTrackingTask();
+            taskFrame[i].setCallback(markerManager);
         }
+
+        this.dataChannel = datagramChannel;
+        this.serverAddr = socketAddress;
+
+        this.taskTransmission = new TransmissionTask();
+        this.taskReceiving = new ReceivingTask(datagramChannel);
+
+        markerManager.setRenderAdapter(renderAdapter);
+        markerManager.setCallback(new MarkerImpl.Callback() {
+            @Override
+            public void onSample(int frameId, byte[] frameData) {
+                ArManager.this.taskTransmission.setData(frameId, frameData, dataChannel, serverAddr);
+                handlerNetwork.post(ArManager.this.taskTransmission);
+                taskReceiving.updateLatestSentID(frameId);
+            }
+        });
+
+        taskReceiving.setCallback(new ReceivingTask.Callback() {
+            @Override
+            public void onReceive(int resultID, Markers markers) {
+                markerManager.updateMarkers(markers, resultID);
+            }
+        });
     }
 
-    public void initializeFrame(){
-
-    }
-
-    public void processFrame(byte[] frameData){
+    public void driveFrame(byte[] frameData){
         int taskId = frameID % FRAME_THREAD_SIZE;
         FrameTrackingTask task = taskFrame[taskId];
         if (task.isBusy()) return;
-        frameID++;
-        task.setFrameData(frameID, frameData);
+        task.setFrameData(++frameID, frameData);
         handlerFrame[taskId].post(task);
+
+        handlerNetwork.post(this.taskReceiving);
     }
-
-    public void start(){
-
-    }
-
-    public void setMarker(Markers marker){
-
-    }
-
-
 
 }

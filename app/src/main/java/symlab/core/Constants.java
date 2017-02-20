@@ -3,9 +3,11 @@ package symlab.core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
+import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfPoint3f;
 import org.opencv.core.Point3;
 import org.opencv.core.TermCriteria;
+import org.opencv.highgui.Highgui;
 
 /**
  * Created by st0rm23 on 2017/2/19.
@@ -32,6 +34,7 @@ public class Constants {
     static public final double[] distCoeffsData = new double[]{2.8048006231906419e-001, -1.1828928706191699e+000, 0, 0, 1.4865861018485209e+000};
     static public final double[][] cvToGlData = new double[][]{{1.0, 0, 0, 0}, {0, -1.0, 0, 0}, {0, 0, -1.0, 0}, {0, 0, 0, 1.0}};
 
+    static public final MatOfInt Image_Params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 50);
     static public final int TRACKING_THRESHOLD = 4;
 
     static public final boolean EnableMultipleTracking = false;
