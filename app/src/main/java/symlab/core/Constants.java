@@ -31,4 +31,23 @@ public class Constants {
     static public final double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
     static public final double[] distCoeffsData = new double[]{2.8048006231906419e-001, -1.1828928706191699e+000, 0, 0, 1.4865861018485209e+000};
     static public final double[][] cvToGlData = new double[][]{{1.0, 0, 0, 0}, {0, -1.0, 0, 0}, {0, 0, -1.0, 0}, {0, 0, 0, 1.0}};
+
+    static public final int TRACKING_THRESHOLD = 4;
+
+    static public final boolean EnableMultipleTracking = false;
+    static public final boolean ShowGL = true;
+
+    static public final MatOfDouble distCoeffs = new MatOfDouble();
+    static public final Mat cameraMatrix = new Mat(3, 3, CvType.CV_64FC1);
+    static public final Mat cvToGl = new Mat(4, 4, CvType.CV_64FC1);
+
+    static {
+        for(int i = 0; i < 3; i++)
+            for(int j = 0; j < 3; j++)
+                cameraMatrix.put(i, j, Constants.cameraMatrixData[i][j]);
+        distCoeffs.fromArray(Constants.distCoeffsData);
+        for(int i = 0; i < 4; i++)
+            for(int j = 0; j < 4; j++)
+                cvToGl.put(i, j, Constants.cvToGlData[i][j]);
+    }
 }

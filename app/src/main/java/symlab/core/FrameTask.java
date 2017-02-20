@@ -92,7 +92,7 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
             }
         }
 
-        return new Pair(refinedPrePoint, refinedNextPoint);
+        return new Pair<MatOfPoint2f, MatOfPoint2f>(refinedPrePoint, refinedNextPoint);
     }
 
     private MatOfPoint2f refineFeaturePoint(int[] standardBitmap, int totalValid, int[] oldBitmap, MatOfPoint2f oldFeaturePoint){
@@ -134,6 +134,31 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
         }
     }
 
+    private void initialize(Mat GRAYMat){
+        Log.v(Constants.TAG, "get tracking points");
+        MatOfPoint initial = new MatOfPoint();
+        Imgproc.goodFeaturesToTrack(GRAYMat, initial, Constants.MAX_POINTS, 0.01, 10, new Mat(), 3, false, 0.04);
+        SharedMemory.Points1 = new MatOfPoint2f(initial.toArray());
+        Imgproc.cornerSubPix(GRAYMat, SharedMemory.Points1, Constants.subPixWinSize, new org.opencv.core.Size(-1, -1), Constants.termcrit);
+        SharedMemory.trackingID++;
+
+        SharedMemory.bitmap1 = new int[Constants.MAX_POINTS];
+        if (!SharedMemory.EnableMultipleTracking || !SharedMemory.PosterChanged) {
+            for (int i = 0; i < SharedMemory.Points1.rows(); i++)
+                SharedMemory.bitmap1[i] = 1;
+        } else {
+            for (int i = 0; i < SharedMemory.Markers1.Num; i++) {
+                for (int j = 0; j < Constants.MAX_POINTS; j++) {
+                    if (isInside(new Point(SharedMemory.Points1.get(j, 0)), SharedMemory.Markers1.Recs[i])) {
+                        SharedMemory.bitmap1[j] = SharedMemory.Markers1.IDs[i];
+                        SharedMemory.Markers1.TrackingPointsNums[i]++;
+                    }
+                }
+                Log.v(Constants.TAG, "Marker " + SharedMemory.Markers1.IDs[i] + " points num: " + SharedMemory.Markers1.TrackingPointsNums[i]);
+            }
+        }
+    }
+
     @Override
     protected Void doInBackground(byte[]... frmdata) {
         //Long tsLong = System.currentTimeMillis();
@@ -170,10 +195,7 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
                 if (SharedMemory.Markers1 != null && SharedMemory.Markers1.Num != 0) {
                     if (recoverFrame) { //服务器返回，校准homography
                         //Log.d(TAG, "frm " + frmID + " recover from " + resID);
-
-                        do {
-                            curHistory = SharedMemory.HistoryQueue.poll();
-                        } while (curHistory.HistoryFrameID != SharedMemory.resID);
+                        while ((curHistory = SharedMemory.HistoryQueue.poll()).HistoryFrameID != SharedMemory.resID);
 
                         if (curHistory.HistoryTrackingID == SharedMemory.trackingID) {
                             curHistory.HistoryPoints = refineFeaturePoint(SharedMemory.bitmap1, count, curHistory.historybitmap, curHistory.HistoryPoints);
@@ -200,7 +222,6 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
                             viewReady = false;
                         }
                     }
-
                     SharedMemory.Markers1.Recs = Recs2;
 
                     if(SharedMemory.ShowGL && viewReady) {
@@ -264,29 +285,7 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
         }
 
         if (SharedMemory.InitializeNeeded) {
-            Log.v(Constants.TAG, "get tracking points");
-            MatOfPoint initial = new MatOfPoint();
-            Imgproc.goodFeaturesToTrack(GRAYMat, initial, Constants.MAX_POINTS, 0.01, 10, new Mat(), 3, false, 0.04);
-            SharedMemory.Points1 = new MatOfPoint2f(initial.toArray());
-            Imgproc.cornerSubPix(GRAYMat, SharedMemory.Points1, Constants.subPixWinSize, new org.opencv.core.Size(-1, -1), Constants.termcrit);
-            SharedMemory.trackingID++;
-
-            SharedMemory.bitmap1 = new int[Constants.MAX_POINTS];
-            if (!SharedMemory.EnableMultipleTracking || !SharedMemory.PosterChanged) {
-                for (int i = 0; i < SharedMemory.Points1.rows(); i++)
-                    SharedMemory.bitmap1[i] = 1;
-            } else {
-                for (int i = 0; i < SharedMemory.Markers1.Num; i++) {
-                    for (int j = 0; j < Constants.MAX_POINTS; j++) {
-                        if (isInside(new Point(SharedMemory.Points1.get(j, 0)), SharedMemory.Markers1.Recs[i])) {
-                            SharedMemory.bitmap1[j] = SharedMemory.Markers1.IDs[i];
-                            SharedMemory.Markers1.TrackingPointsNums[i]++;
-                        }
-                    }
-                    Log.v(Constants.TAG, "Marker " + SharedMemory.Markers1.IDs[i] + " points num: " + SharedMemory.Markers1.TrackingPointsNums[i]);
-                }
-            }
-
+            initialize(GRAYMat);
             SharedMemory.InitializeNeeded = false;
         }
 
@@ -301,8 +300,6 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
         if (listener != null)listener.onFinish();
     }
 
-
-
     private boolean isInside(Point point, Mat Rec) {
         int i, j;
         boolean result = false;
@@ -315,7 +312,6 @@ public class FrameTask extends AsyncTask<byte[], Void, Void> {
         }
         return result;
     }
-
 
     private CallbackListener listener;
 
