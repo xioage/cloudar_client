@@ -6,7 +6,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.hardware.Camera;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Display;
@@ -16,15 +15,7 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 
-import org.opencv.core.Point;
 import org.rajawali3d.view.ISurface;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.channels.DatagramChannel;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import symlab.core.ArManager;
 import symlab.core.Constants;
@@ -35,25 +26,15 @@ public class MainActivity extends Activity implements View.OnTouchListener {
 
     private SurfaceView mPreview;
     private SurfaceHolder mPreviewHolder;
+    protected ISurface mRenderSurface;
+    protected PosterRenderer mRenderer;
+
     private Camera mCamera;
     private boolean mInPreview = false;
     private boolean mCameraConfigured = false;
     private DrawOnTop mDraw;
     private byte[] callbackBuffer;
     private int time_o, time_n, fps;
-
-    private SocketAddress serverAddress;
-    private DatagramChannel dataChannel;
-    private int portNum;
-    private String ip;
-    private float dispScale;
-
-    protected ISurface mRenderSurface;
-    protected PosterRenderer mRenderer;
-
-    static {
-        System.loadLibrary("opencv_java");
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,31 +54,6 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         mPreviewHolder.addCallback(surfaceCallback);
         mPreview.setZOrderMediaOverlay(false);
 
-        Display disp = getWindowManager().getDefaultDisplay();
-        if (disp.getHeight() == 1080)
-            dispScale = Constants.scale;
-        else if (disp.getHeight() == 1440)
-            dispScale = (float) 1.33 * Constants.scale;
-
-        /*
-        File sdcard = Environment.getExternalStorageDirectory();
-        File file = new File(sdcard,"cloudConfig.txt");
-
-        try {
-            BufferedReader br = new BufferedReader(new FileReader(file));
-
-            ip = br.readLine();
-            portNum = Integer.parseInt(br.readLine());
-            br.close();
-        }
-        catch (IOException e) {
-            Log.d(Constants.TAG, "config file error");
-        }
-        */
-
-        ip = "104.199.140.59";
-        portNum = 51717;
-
         if (Constants.Show2DView) {
             mDraw = new DrawOnTop(this);
             addContentView(mDraw, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -110,16 +66,7 @@ public class MainActivity extends Activity implements View.OnTouchListener {
             ((View) mRenderSurface).setOnTouchListener(this);
         }
 
-        try {
-            serverAddress = new InetSocketAddress(ip, portNum);
-            dataChannel = DatagramChannel.open();
-            dataChannel.configureBlocking(false);
-            dataChannel.socket().connect(serverAddress);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        ArManager.getInstance().init(dataChannel, serverAddress, new RenderAdapter() {
+        ArManager.getInstance().init(new RenderAdapter() {
             @Override
             public void onMarkerChanged(Markers markers) {
                 mRenderer.onPosterChanged(markers);
@@ -136,22 +83,24 @@ public class MainActivity extends Activity implements View.OnTouchListener {
     public void onStart() {
         Log.i(Constants.TAG, " onStart() called.");
         super.onStart();
-
-        new startTransmissionTask().execute();
     }
 
     @Override
     public void onResume() {
         Log.i(Constants.TAG, " onResume() called.");
         super.onResume();
+
         mCamera = Camera.open();
+        ArManager.getInstance().start();
     }
 
     @Override
     public void onPause() {
         Log.i(Constants.TAG, " onPause() called.");
+        super.onPause();
+
         if (Constants.ShowGL)
-            ((PosterRenderer) mRenderer).onActivityPause();
+            mRenderer.onActivityPause();
 
         if (mInPreview)
             mCamera.stopPreview();
@@ -160,23 +109,18 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         mCamera.release();
         mCamera = null;
         mInPreview = false;
-        super.onPause();
+
+        ArManager.getInstance().stop();
     }
 
     @Override
     public void onStop() {
         Log.i(Constants.TAG, " onStop() called.");
         super.onStop();
-        new endTransmissionTask().execute();
     }
 
     @Override
     protected void onDestroy() {
-        try {
-            dataChannel.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
         Log.i(Constants.TAG, " onDestroy() called.");
         super.onDestroy();
     }
@@ -185,7 +129,7 @@ public class MainActivity extends Activity implements View.OnTouchListener {
     public boolean onTouch(View v, MotionEvent event) {
         Log.d(Constants.TAG, "touch event");
         if (Constants.ShowGL && event.getAction() == MotionEvent.ACTION_DOWN) {
-            ((PosterRenderer) mRenderer).getObjectAt(event.getX(), event.getY());
+            mRenderer.getObjectAt(event.getX(), event.getY());
         }
 
         return this.onTouchEvent(event);
@@ -215,19 +159,15 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         }
     }
 
-    private void startPreview() {
-        if (mCameraConfigured && mCamera != null) {
-            mCamera.startPreview();
-            mCamera.autoFocus(null);
-            mInPreview = true;
-        }
-    }
-
     SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {
         public void surfaceCreated(SurfaceHolder holder) {
             Log.i(Constants.TAG, " surfaceCreated() called.");
             initPreview(Constants.previewWidth, Constants.previewHeight);
-            startPreview();
+            if (mCameraConfigured && mCamera != null) {
+                mCamera.startPreview();
+                mCamera.autoFocus(null);
+                mInPreview = true;
+            }
         }
 
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
@@ -240,7 +180,6 @@ public class MainActivity extends Activity implements View.OnTouchListener {
     };
 
     Camera.PreviewCallback frameIMGProcCallback = new Camera.PreviewCallback() {
-
         private int count = 0;
 
         @Override
@@ -256,70 +195,13 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         }
     };
 
-    private class startTransmissionTask extends AsyncTask<byte[], Void, Void> {
-        @Override
-        protected Void doInBackground(byte[]... frmdata) {
-            try {
-                Log.d(Constants.TAG, "sending start signals");
-                for (int i = 0; i < 3; i++) {
-                    ByteBuffer buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(0);
-                    buffer.flip();
-                    dataChannel.send(buffer, serverAddress);
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-
-        @Override
-        public void onPostExecute(Void result) {
-        }
-    }
-
-    private class endTransmissionTask extends AsyncTask<byte[], Void, Void> {
-        @Override
-        protected Void doInBackground(byte[]... frmdata) {
-            try {
-                Log.d(Constants.TAG, "sending end signals");
-                for (int i = 0; i < 1; i++) {
-                    ByteBuffer buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(-1);
-                    buffer.flip();
-                    dataChannel.send(buffer, serverAddress);
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-
-        @Override
-        public void onPostExecute(Void result) {
-        }
-    }
-
     class DrawOnTop extends View {
-        Paint paintPoint;
-        Paint paintLine;
         Paint paintWord;
         private boolean ShowFPS = true;
-        private boolean ShowEdge = false;
-        private boolean ShowName = false;
-        private boolean ShowPoints = false;
+        private int preFrameID;
 
         public DrawOnTop(Context context) {
             super(context);
-            paintPoint = new Paint();
-            paintPoint.setStyle(Paint.Style.STROKE);
-            paintPoint.setStrokeWidth(2);
-            paintPoint.setColor(Color.YELLOW);
-
-            paintLine = new Paint();
-            paintLine.setStyle(Paint.Style.STROKE);
-            paintLine.setStrokeWidth(10);
-            paintLine.setColor(Color.GREEN);
 
             paintWord = new Paint();
             paintWord.setStyle(Paint.Style.STROKE);
@@ -328,8 +210,6 @@ public class MainActivity extends Activity implements View.OnTouchListener {
             paintWord.setTextAlign(Paint.Align.CENTER);
             paintWord.setTextSize(50);
         }
-
-        private int preFrameID;
 
         public void updateData(int frameID){
             if (ShowFPS) {
@@ -347,29 +227,6 @@ public class MainActivity extends Activity implements View.OnTouchListener {
             if (ShowFPS) {
                 canvas.drawText("fps: " + fps, 100, 50, paintWord);
             }
-/*
-            if (ShowEdge && SharedMemory.Markers1 != null && SharedMemory.Markers1.Num != 0) {
-                float[][] points = new float[4][2];
-                for (int i = 0; i < SharedMemory.Markers1.Num; i++) {
-                    for (int j = 0; j < 4; j++)
-                        SharedMemory.Markers1.Recs[i].get(j, 0, points[j]);
-                    for (int j = 0; j < 4; j++)
-                        canvas.drawLine(dispScale * points[j][0], dispScale * points[j][1], dispScale * points[(j + 1) % 4][0], dispScale * points[(j + 1) % 4][1], paintLine);
-                    if (ShowName)
-                        canvas.drawText(SharedMemory.Markers1.Names[i], dispScale * points[0][0] + 400, dispScale * points[0][1] + 200, paintWord);
-                }
-            }
-
-            if (ShowPoints && SharedMemory.Points1 != null) {
-                Point[] points = SharedMemory.Points1.toArray();
-                for (int i = 0; i < points.length; i++) {
-                    canvas.drawCircle(dispScale * (float) points[i].x, dispScale * (float) points[i].y, 5, paintPoint);
-                }
-            }
-            */
         }
-
     }
-
 }
-

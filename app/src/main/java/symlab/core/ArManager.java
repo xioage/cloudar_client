@@ -1,10 +1,11 @@
 package symlab.core;
 
-import android.content.Context;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 
@@ -32,9 +33,9 @@ public class ArManager {
     private FrameTrackingTask[] taskFrame;
     private ReceivingTask taskReceiving;
     private TransmissionTask taskTransmission;
+    private MarkerImpl markerManager;
     private DatagramChannel dataChannel;
     private SocketAddress serverAddr;
-    private MarkerImpl markerManager;
 
     private int frameID = 0;
 
@@ -53,34 +54,47 @@ public class ArManager {
         return new Handler(handlerThread.getLooper());
     }
 
-    public void init(DatagramChannel datagramChannel, SocketAddress socketAddress, RenderAdapter renderAdapter){
+    public void init(RenderAdapter renderAdapter){
+        System.loadLibrary("opencv_java");
 
-        this.handlerUtil = createAndStartThread("util thread");//start util thread
+        this.handlerUtil = createAndStartThread("util thread"); //start util thread
         this.handlerNetwork = createAndStartThread("network thread");
-
-
-        markerManager = new MarkerImpl(handlerUtil);
-
         this.handlerFrame = new Handler[FRAME_THREAD_SIZE];
-        this.taskFrame = new FrameTrackingTask[FRAME_THREAD_SIZE];
         for (int i = 0; i< FRAME_THREAD_SIZE; i++){ //start frame processing thread
             this.handlerFrame[i] = createAndStartThread(String.format("frame thread %d", i));
+        }
+
+        handlerNetwork.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    serverAddr = new InetSocketAddress(Constants.ip, Constants.portNum);
+                    dataChannel = DatagramChannel.open();
+                    dataChannel.configureBlocking(false);
+                    dataChannel.socket().connect(serverAddr);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        while(dataChannel == null);
+
+        markerManager = new MarkerImpl(handlerUtil);
+        taskTransmission = new TransmissionTask(dataChannel, serverAddr);
+        taskReceiving = new ReceivingTask(dataChannel);
+        taskFrame = new FrameTrackingTask[FRAME_THREAD_SIZE];
+        for (int i = 0; i< FRAME_THREAD_SIZE; i++){
             taskFrame[i] = new FrameTrackingTask();
             taskFrame[i].setCallback(markerManager);
         }
-
-        this.dataChannel = datagramChannel;
-        this.serverAddr = socketAddress;
-
-        this.taskTransmission = new TransmissionTask();
-        this.taskReceiving = new ReceivingTask(datagramChannel);
 
         markerManager.setRenderAdapter(renderAdapter);
         markerManager.setCallback(new MarkerImpl.Callback() {
             @Override
             public void onSample(int frameId, byte[] frameData) {
-                ArManager.this.taskTransmission.setData(frameId, frameData, dataChannel, serverAddr);
-                handlerNetwork.post(ArManager.this.taskTransmission);
+                taskTransmission.setData(frameId, frameData);
+                handlerNetwork.post(taskTransmission);
                 taskReceiving.updateLatestSentID(frameId);
             }
         });
@@ -93,6 +107,34 @@ public class ArManager {
         });
     }
 
+    public void start() {
+        taskTransmission.setData(0, null);
+        for(int i = 0; i < 3; i++)
+            handlerNetwork.post(taskTransmission);
+    }
+
+    public void stop() {
+        taskTransmission.setData(-1, null);
+        for(int i = 0; i < 3; i++)
+            handlerNetwork.post(taskTransmission);
+
+        handlerNetwork.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    dataChannel.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        for(int i = 0; i < FRAME_THREAD_SIZE; i++)
+            handlerFrame[i].getLooper().quitSafely();
+        handlerNetwork.getLooper().quitSafely();
+        handlerUtil.getLooper().quitSafely();
+    }
+
     public void driveFrame(byte[] frameData){
         int taskId = frameID % FRAME_THREAD_SIZE;
         FrameTrackingTask task = taskFrame[taskId];
@@ -100,7 +142,7 @@ public class ArManager {
         task.setFrameData(++frameID, frameData);
         handlerFrame[taskId].post(task);
 
-        handlerNetwork.post(this.taskReceiving);
+        handlerNetwork.post(taskReceiving);
     }
 
     public int frameSnapshot(){

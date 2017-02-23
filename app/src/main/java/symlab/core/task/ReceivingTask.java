@@ -40,16 +40,14 @@ public class ReceivingTask implements Runnable{
         this.lastSentID = lastSentID;
     }
 
-
     @Override
     public void run() {
         resPacket.clear();
         try {
             if (datagramChannel.receive(resPacket) != null) {
                 res = resPacket.array();
-                //Log.d(Eval, "received size: " + res.length);
+                Log.v(Constants.TAG, "something received");
             } else {
-                Log.v(Constants.TAG, "nothing received");
                 res = null;
             }
         } catch (IOException e) {
@@ -62,13 +60,13 @@ public class ReceivingTask implements Runnable{
             System.arraycopy(res, 4, tmp, 0, 4);
             newMarkerNum = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
-            Long tsLong = System.currentTimeMillis();
-            String ts_getResult = tsLong.toString();
+            //Long tsLong = System.currentTimeMillis();
+            //String ts_getResult = tsLong.toString();
 
             if (resultID <= 5) {
-                Log.d(Constants.Eval, "echo " + resultID + " received: " + ts_getResult);
+                Log.d(Constants.Eval, "metadata " + resultID + " received ");
             } else if (resultID == lastSentID) {
-                Log.d(Constants.Eval, "res " + resultID + " received: " + ts_getResult);
+                Log.d(Constants.Eval, "res " + resultID + " received ");
                 Markers markers = new Markers(newMarkerNum);
 
                 for (int i = 0; i < newMarkerNum; i++) {
@@ -90,7 +88,6 @@ public class ReceivingTask implements Runnable{
                     markers.Names[i] = markerName.substring(0, markerName.indexOf("."));
                 }
 
-
                 if (callback != null){
                     callback.onReceive(resultID, markers);
                 }
@@ -98,7 +95,6 @@ public class ReceivingTask implements Runnable{
                 Log.d(Constants.TAG, "discard outdate result: " + resultID);
             }
         }
-
     }
 
     private Callback callback;

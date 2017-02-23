@@ -1,9 +1,7 @@
 package symlab.core.impl;
 
-import android.graphics.Bitmap;
 import android.os.Handler;
 import android.util.Log;
-import android.widget.Adapter;
 
 import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
@@ -255,7 +253,6 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         return bitmap;
     }
 
-
     private RenderAdapter adapter;
 
     public void setRenderAdapter(RenderAdapter adapter){
@@ -268,9 +265,7 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         this.callback = callback;
     }
 
-
     public interface Callback {
         void onSample(int frameId, byte[] frameData);
     }
-
 }

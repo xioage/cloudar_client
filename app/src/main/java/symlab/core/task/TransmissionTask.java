@@ -25,7 +25,7 @@ import symlab.core.Constants;
 
 public class TransmissionTask implements Runnable {
 
-    private final int MESSAGE_ECHO = 0;
+    private final int MESSAGE_META = 0;
     private final int IMAGE_DETECT = 2;
 
     private int dataType;
@@ -43,7 +43,10 @@ public class TransmissionTask implements Runnable {
     public Mat YUVMatTrack, YUVMatTrans, YUVMatScaled;
     public Mat BGRMat, BGRMatScaled;
 
-    public TransmissionTask() {
+    public TransmissionTask(DatagramChannel datagramChannel, SocketAddress serverAddress) {
+        this.datagramChannel = datagramChannel;
+        this.serverAddress = serverAddress;
+
         YUVMatTrack = new Mat(Constants.previewHeight + Constants.previewHeight / 2, Constants.previewWidth, CvType.CV_8UC1);
         YUVMatTrans = new Mat(Constants.previewHeight + Constants.previewHeight / 2, Constants.previewWidth, CvType.CV_8UC1);
         YUVMatScaled = new Mat((Constants.previewHeight + Constants.previewHeight / 2) / Constants.scale, Constants.previewWidth / Constants.scale, CvType.CV_8UC1);
@@ -51,14 +54,12 @@ public class TransmissionTask implements Runnable {
         BGRMatScaled = new Mat(Constants.previewHeight / Constants.scale, Constants.previewWidth / Constants.scale, CvType.CV_8UC3);
     }
 
-    public void setData(int frmID, byte[] frameData, DatagramChannel datagramChannel, SocketAddress serverAddress){
-        if (this.frmID <= 5) dataType = MESSAGE_ECHO;
-        else dataType = IMAGE_DETECT;
-
+    public void setData(int frmID, byte[] frameData){
         this.frmID = frmID;
         this.frameData = frameData;
-        this.datagramChannel = datagramChannel;
-        this.serverAddress = serverAddress;
+
+        if (this.frmID <= 5) dataType = MESSAGE_META;
+        else dataType = IMAGE_DETECT;
     }
 
     @Override
@@ -77,7 +78,7 @@ public class TransmissionTask implements Runnable {
             frmdataToSend = new byte[datasize];
 
             imgbuff.get(0, 0, frmdataToSend);
-        } else if (dataType == MESSAGE_ECHO) {
+        } else if (dataType == MESSAGE_META) {
             datasize = 0;
             frmdataToSend = null;
         }
@@ -98,12 +99,12 @@ public class TransmissionTask implements Runnable {
             datagramChannel.send(buffer, serverAddress);
             //Log.d(Eval, "sent size: " + packetContent.length);
 
-            Long tsLong = System.currentTimeMillis();
-            String ts_sendCameraFrame = tsLong.toString();
-            if (frmID <= 5)
-                Log.d(Constants.Eval, "echo " + frmID + " sent: " + ts_sendCameraFrame);
+            //Long tsLong = System.currentTimeMillis();
+            //String ts_sendCameraFrame = tsLong.toString();
+            if (dataType == MESSAGE_META)
+                Log.d(Constants.Eval, "metadata " + frmID + " sent ");
             else
-                Log.d(Constants.Eval, "frame " + frmID + " sent: " + ts_sendCameraFrame);
+                Log.d(Constants.Eval, "frame " + frmID + " sent ");
         } catch (IOException e) {
             e.printStackTrace();
         }
