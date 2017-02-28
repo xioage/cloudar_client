@@ -42,14 +42,13 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     private double[] projectionMatrix = new double[16];
     private double[] glViewMatrixData = new double[16];
     private Trailer[] trailers = new Trailer[3];
-    private Cover[] covers = new Cover[3];
     private ObjectColorPicker mPicker;
     private double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
     private String url = "rtsp://";
     private String TAG = "PosterRenderer";
 
     private boolean onlineVideo = false;
-    private boolean enableVideo = false;
+    private boolean enableVideo = true;
 
     public PosterRenderer(Context context, int scale) {
         super(context);
@@ -57,7 +56,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     }
 
     @Override
-
     protected void initScene() {
         Log.d(TAG, "initScene called()");
         PointLight light = new PointLight();
@@ -78,13 +76,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
             trailers[i].hide();
             trailers[i].setPosition(i * -16, 0, 0);
             trailers[0].addChild(trailers[i]);
-        }
-
-        for(int i = 0; i < 3; i++) {
-            covers[i] = new Cover(i+3);
-            covers[i].setPosition(10, 0, 0);
-            covers[i].setVisible(false);
-            trailers[0].addChild(covers[i]);
         }
 
         calcProjectionMatrix();
@@ -129,9 +120,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
                 trailers[i].hide();
             }
         }
-        for (int i = 0; i < 3; i++) {
-            covers[i].hide();
-        }
     }
 
     public void onPosterChanged(Markers markers) {
@@ -152,8 +140,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
                     case 2:
                     case 3:
                     case 4:
-                        covers[curID-2].show();
-                        break;
                     default:
                         break;
                 }
@@ -169,8 +155,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
         trailers[0].setRotation(glViewMatrix.inverse());
         for (int i = 0; i < trailerNum; i++)
             trailers[i].updateTexture();
-        for (int i = 0; i < 3; i++)
-            covers[i].onRender();
     }
 
     @Override
@@ -204,9 +188,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
             else if(pickedTrailer != i)
                 trailers[i].hide();
         }
-
-        for(int i = 0; i < 3; i++)
-            covers[i].onTouch(object);
     }
 
     @Override
@@ -353,78 +334,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
 
         public void show() {
             mButton.setVisible(true);
-        }
-    }
-
-    private class Cover extends Plane {
-        private Material contentMaterial;
-        private Object3D mSphere;
-        private String url;
-
-        public Cover(int ID) {
-            super(10, 10, 1, 1);
-            contentMaterial = new Material();
-            try {
-                switch(ID) {
-                    case 3:
-                        contentMaterial.addTexture(new Texture("beers", R.drawable.beers));
-                        url = "https://www.amazon.com/500-Beers-Compendium-Sellers-Publishing/dp/1416207880/ref=sr_1_1?ie=UTF8&qid=1471501468&sr=8-1&keywords=500+beers";
-                        break;
-                    case 4:
-                        contentMaterial.addTexture(new Texture("mobydick", R.drawable.mobydick));
-                        url = "https://www.amazon.com/Moby-Dick-Herman-Melville/dp/1503280780/ref=sr_1_2?ie=UTF8&qid=1471501519&sr=8-2&keywords=mobydick";
-                        break;
-                    case 5:
-                        contentMaterial.addTexture(new Texture("whatif", R.drawable.whatif));
-                        url = "https://www.amazon.com/What-If-Scientific-Hypothetical-Questions/dp/0544272994/ref=sr_1_1?ie=UTF8&qid=1471501539&sr=8-1&keywords=what+if";
-                        break;
-                    default:
-                        break;
-                }
-            } catch (ATexture.TextureException e) {
-                e.printStackTrace();
-            }
-            contentMaterial.setColorInfluence(0);
-            contentMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
-            this.setMaterial(contentMaterial);
-
-            try {
-                Material material = new Material();
-                material.addTexture(new Texture("earthColors",
-                        R.drawable.earthtruecolor_nasa_big));
-                material.setColorInfluence(0);
-                mSphere = new Sphere(0.6f, 24, 24);
-                mSphere.setMaterial(material);
-                mSphere.setPosition(-4, -4, 0.4f);
-                this.addChild(mSphere);
-            } catch (ATexture.TextureException e) {
-                e.printStackTrace();
-            }
-
-            mPicker.registerObject(mSphere);
-        }
-
-        public void onRender() {
-            mSphere.rotate(Vector3.Axis.Y, 1.0);
-        }
-
-        public int onTouch(Object3D object) {
-            if(object == mSphere) {
-                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                getContext().startActivity(browserIntent);
-            }
-            return 0;
-        }
-
-        public void onPause() {
-        }
-
-        public void hide() {
-            this.setVisible(false);
-        }
-
-        public void show() {
-            this.setVisible(true);
         }
     }
 }

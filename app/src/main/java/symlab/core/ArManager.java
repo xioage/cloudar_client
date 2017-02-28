@@ -57,28 +57,20 @@ public class ArManager {
     public void init(RenderAdapter renderAdapter){
         System.loadLibrary("opencv_java");
 
+        try {
+            serverAddr = new InetSocketAddress(Constants.ip, Constants.portNum);
+            dataChannel = DatagramChannel.open();
+            dataChannel.configureBlocking(false);
+            dataChannel.socket().connect(serverAddr);
+        } catch (Exception e) {
+        }
+
         this.handlerUtil = createAndStartThread("util thread"); //start util thread
         this.handlerNetwork = createAndStartThread("network thread");
         this.handlerFrame = new Handler[FRAME_THREAD_SIZE];
         for (int i = 0; i< FRAME_THREAD_SIZE; i++){ //start frame processing thread
             this.handlerFrame[i] = createAndStartThread(String.format("frame thread %d", i));
         }
-
-        handlerNetwork.post(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    serverAddr = new InetSocketAddress(Constants.ip, Constants.portNum);
-                    dataChannel = DatagramChannel.open();
-                    dataChannel.configureBlocking(false);
-                    dataChannel.socket().connect(serverAddr);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-
-        while(dataChannel == null);
 
         markerManager = new MarkerImpl(handlerUtil);
         taskTransmission = new TransmissionTask(dataChannel, serverAddr);
