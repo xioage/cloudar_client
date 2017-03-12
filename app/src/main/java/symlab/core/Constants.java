@@ -21,7 +21,7 @@ public class Constants {
     static public final int previewWidth = 1920;
     static public final int previewHeight = 1080;
     static public final int scale = 4;
-    static public final int MAX_POINTS = 60;
+    static public final int MAX_POINTS = 90;
     static public final org.opencv.core.Size winSize = new org.opencv.core.Size(10, 10);
     static public final org.opencv.core.Size subPixWinSize = new org.opencv.core.Size(31, 31);
     static public final TermCriteria termcrit = new TermCriteria(TermCriteria.MAX_ITER | TermCriteria.EPS, 20, 0.03);

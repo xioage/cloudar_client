@@ -4,14 +4,13 @@ import android.util.Log;
 
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
-import org.rajawali3d.loader.LoaderGCode;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
 
-import symlab.cloudridar.Markers;
+import symlab.core.impl.MarkerGroup;
 import symlab.core.Constants;
 
 /**
@@ -67,13 +66,13 @@ public class ReceivingTask implements Runnable{
                 Log.d(Constants.Eval, "metadata " + resultID + " received ");
             } else if (resultID == lastSentID) {
                 Log.d(Constants.Eval, "res " + resultID + " received ");
-                Markers markers = new Markers(newMarkerNum);
+                MarkerGroup markerGroup = new MarkerGroup();
 
                 for (int i = 0; i < newMarkerNum; i++) {
-                    markers.Recs[i] = new MatOfPoint2f();
-                    markers.Recs[i].alloc(4);
+                    MatOfPoint2f Rec = new MatOfPoint2f();
+                    Rec.alloc(4);
                     System.arraycopy(res, 8 + i * 100, tmp, 0, 4);
-                    markers.IDs[i] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                    int ID = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
                     for (int j = 0; j < 8; j++) {
                         System.arraycopy(res, 12 + i * 100 + j * 4, tmp, 0, 4);
@@ -81,15 +80,17 @@ public class ReceivingTask implements Runnable{
                     }
                     for (int j = 0; j < 4; j++)
                         pointArray[j] = new Point(floatres[j * 2], floatres[j * 2 + 1]);
-                    markers.Recs[i].fromArray(pointArray);
+                    Rec.fromArray(pointArray);
 
                     System.arraycopy(res, 44 + i * 100, name, 0, 64);
                     String markerName = new String(name);
-                    markers.Names[i] = markerName.substring(0, markerName.indexOf("."));
+                    String Name = markerName.substring(0, markerName.indexOf("."));
+
+                    markerGroup.addMarker(ID, Name, Rec);
                 }
 
                 if (callback != null){
-                    callback.onReceive(resultID, markers);
+                    callback.onReceive(resultID, markerGroup);
                 }
             } else {
                 Log.d(Constants.TAG, "discard outdate result: " + resultID);
@@ -104,6 +105,6 @@ public class ReceivingTask implements Runnable{
     }
 
     public interface Callback {
-        void onReceive(int resultID, Markers markers);
+        void onReceive(int resultID, MarkerGroup markerGroup);
     }
 }

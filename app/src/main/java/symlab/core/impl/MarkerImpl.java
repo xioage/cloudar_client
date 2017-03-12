@@ -11,12 +11,12 @@ import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.MatOfPoint3f;
 import org.opencv.core.Point;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 
 import symlab.cloudridar.HistoryTrackingPoints;
-import symlab.cloudridar.Markers;
 import symlab.core.Constants;
 import symlab.core.adapter.RenderAdapter;
 import symlab.core.task.FrameTrackingTask;
@@ -27,7 +27,7 @@ import symlab.core.task.FrameTrackingTask;
 
 public class MarkerImpl implements FrameTrackingTask.Callback{
 
-    private Markers markers;
+    private MarkerGroup markerGroup;
     private boolean newMarkerFlag;
     private int trackingID;
     private int resultID;
@@ -39,24 +39,26 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         historyQueue = new LinkedList<HistoryTrackingPoints>();
     }
 
-    public void updateMarkers(final Markers markers, final int resultID){
-        if (markers == null || markers.Num == 0) return;
+    public void updateMarkers(final MarkerGroup markerGroup, final int resultID){
+        if (markerGroup == null) return;
+
         handler.post(new Runnable() {
             @Override
             public void run() {
-                boolean markersChanged = false;
-                if (MarkerImpl.this.markers != null)
-                   markersChanged = !Arrays.equals(MarkerImpl.this.markers.IDs, markers.IDs);
+                boolean markersChanged;
+
+                if (MarkerImpl.this.markerGroup != null)
+                   markersChanged = MarkerImpl.this.markerGroup.equals(markerGroup.getIDs());
                 else
                    markersChanged = true;
 
-                if (!markersChanged && MarkerImpl.this.markers != null)
-                    markers.TrackingPointsNums = MarkerImpl.this.markers.TrackingPointsNums;
+                if (!markersChanged && MarkerImpl.this.markerGroup != null)
+                    markerGroup.setTrackingPointsNums(MarkerImpl.this.markerGroup.getTrackingPointsNums());
 
-                if (markersChanged && adapter != null) adapter.onMarkerChanged(markers);
+                if (markersChanged && adapter != null) adapter.onMarkerChanged(markerGroup);
 
                 newMarkerFlag = true;
-                MarkerImpl.this.markers = markers;
+                MarkerImpl.this.markerGroup = markerGroup;
                 MarkerImpl.this.resultID = resultID;
             }
         });
@@ -80,8 +82,8 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
 
         int iterator = 0, refinedCount = 0;
         for (int i=0; i<Constants.MAX_POINTS; i++){
-            if (oldBitmap[i] != 0){ //旧的还有效
-                if (standardBitmap[i] != 0){ //现在还有效
+            if (oldBitmap[i] != 0){ //old is still valid
+                if (standardBitmap[i] != 0){ //new is still valid
                     refinedFeature.put(refinedCount, 0, oldFeaturePoint.get(iterator, 0));
                     refinedCount++;
                 }
@@ -92,24 +94,25 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         return refinedFeature;
     }
 
-    private void findHomography(MatOfPoint2f oldFeatures, MatOfPoint2f nowFeatures, int[] bitmap, Markers markers){
+    private void findHomography(MatOfPoint2f oldFeatures, MatOfPoint2f nowFeatures, int[] bitmap, MarkerGroup markerGroup){
         if (!Constants.EnableMultipleTracking) {
             Mat homography = Calib3d.findHomography(oldFeatures, nowFeatures, Calib3d.RANSAC, 3);
-            for (int m = 0; m < markers.Num; m++) markers.Homographys[m] = homography;
+            for (int m = 0; m < markerGroup.size(); m++)
+                markerGroup.setHomography(m, homography);
         } else {
-            MatOfPoint2f[] subPoints1 = new MatOfPoint2f[markers.Num];
-            MatOfPoint2f[] subPoints2 = new MatOfPoint2f[markers.Num];
-            for (int m = 0; m < markers.Num; m++) {
-                subPoints1[m] = new MatOfPoint2f(new Mat(markers.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                subPoints2[m] = new MatOfPoint2f(new Mat(markers.TrackingPointsNums[m], 1, CvType.CV_32FC2));
+            MatOfPoint2f[] subPoints1 = new MatOfPoint2f[markerGroup.size()];
+            MatOfPoint2f[] subPoints2 = new MatOfPoint2f[markerGroup.size()];
+            for (int m = 0; m < markerGroup.size(); m++) {
+                subPoints1[m] = new MatOfPoint2f(new Mat(markerGroup.getTrackingPointsNum(m), 1, CvType.CV_32FC2));
+                subPoints2[m] = new MatOfPoint2f(new Mat(markerGroup.getTrackingPointsNum(m), 1, CvType.CV_32FC2));
                 int count = 0;
                 for (int n = 0; n < nowFeatures.rows(); n++) {
-                    if (bitmap[n] == markers.IDs[m]) {
+                    if (bitmap[n] == markerGroup.getID(m)) {
                         subPoints1[m].put(count, 0, oldFeatures.get(n, 0));
                         subPoints2[m].put(count++, 0, nowFeatures.get(n, 0));
                     }
                 }
-                markers.Homographys[m] = Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3);
+                markerGroup.setHomography(m, Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3));
             }
         }
     }
@@ -154,9 +157,9 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
                 if (preFeature == null){
                     trackingID++;
                 } else {
-                    if (markers != null){
+                    if (markerGroup != null){
                         if (!newMarkerFlag){//rectify markers from previous frame
-                            findHomography(preFeature, features, bitmap, markers);
+                            findHomography(preFeature, features, bitmap, markerGroup);
                         } else {//rectify markers from server
                             //Log.d(TAG, "frm " + frmID + " recover from " + resID);
                             HistoryTrackingPoints current;
@@ -165,7 +168,7 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
                             int count = features.rows();
                             if (current.HistoryTrackingID == trackingID) {
                                 current.HistoryPoints = refineFeaturePoint(bitmap, count, current.historybitmap, current.HistoryPoints);
-                                findHomography(current.HistoryPoints, features, bitmap, markers);
+                                findHomography(current.HistoryPoints, features, bitmap, markerGroup);
                             } else {
                                 Log.e(Constants.TAG, "tried to recover from late result, tracking points not match");
                             }
@@ -174,26 +177,25 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
 
                         boolean viewReady = false;
 
-                        MatOfPoint2f[] Recs2 = new MatOfPoint2f[markers.Num];
-                        for (int m = 0; m < markers.Num; m++) {
-                            if(markers.Recs[m] != null && markers.Homographys[m] != null) {
-                                Recs2[m] = new MatOfPoint2f();
-                                Core.perspectiveTransform(markers.Recs[m], Recs2[m], markers.Homographys[m]);
-                                viewReady = true;
-                            } else {
-                                Log.d(Constants.TAG, "null rec");
-                            }
+                        List<MatOfPoint2f> Recs2 = new ArrayList<>();
+                        for (int i = 0; i < markerGroup.size(); i++)
+                            Recs2.add(new MatOfPoint2f());
+
+                        for (int m = 0; m < markerGroup.size(); m++) {
+                            Core.perspectiveTransform(markerGroup.getRec(m), Recs2.get(m), markerGroup.getHomography(m));
+                            viewReady = true;
                         }
-                        markers.Recs = Recs2;
+                        markerGroup.setRecs(Recs2);
 
                         if(Constants.ShowGL && viewReady) {
                             MatOfPoint3f posterPoints = new MatOfPoint3f();
-                            posterPoints.fromArray(Constants.posterPointsData[markers.IDs[0]]);
-                            MatOfPoint2f scenePoints = new MatOfPoint2f(Recs2[0].clone());
+                            posterPoints.fromArray(Constants.posterPointsData[0]);
+                            MatOfPoint2f scenePoints = new MatOfPoint2f(Recs2.get(0));
 
-                            if(false == isInsideViewport(scenePoints)) {
+                            if(!isInsideViewport(scenePoints)) {
                                 Log.d(Constants.TAG, "marker out of view, lost tracking");
-                                if (adapter != null) adapter.onMarkerChanged(null);
+                                markerGroup.removeMarkerByID(markerGroup.getID(0));
+                                if (adapter != null) adapter.onMarkerChanged(markerGroup);
                             }
                             else {
                                 Mat rvec = new Mat();
@@ -240,14 +242,16 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
             for (int i = 0; i <feature.rows(); i++)
                 bitmap[i] = 1;
         } else {
-            for (int i = 0; i < markers.Num; i++) {
+            for (int i = 0; i < markerGroup.size(); i++) {
+                int Num = 0;
                 for (int j = 0; j < Constants.MAX_POINTS; j++) {
-                    if (isInside(new Point(feature.get(j, 0)), markers.Recs[i])) {
-                        bitmap[j] = markers.IDs[i];
-                        markers.TrackingPointsNums[i]++;
+                    if (isInside(new Point(feature.get(j, 0)), markerGroup.getRec(i))) {
+                        bitmap[j] = markerGroup.getID(i);
+                        Num++;
                     }
                 }
-                Log.v(Constants.TAG, "Marker " + markers.IDs[i] + " points num: " + markers.TrackingPointsNums[i]);
+                markerGroup.setTrackingPointsNum(i, Num);
+                //Log.v(Constants.TAG, "Marker " + markers.IDs[i] + " points num: " + markers.TrackingPointsNums[i]);
             }
         }
         return bitmap;

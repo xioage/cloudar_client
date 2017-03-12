@@ -2,14 +2,13 @@ package symlab.core;
 
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.util.Log;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 
-import symlab.cloudridar.Markers;
+import symlab.core.impl.MarkerGroup;
 import symlab.core.adapter.RenderAdapter;
 import symlab.core.impl.MarkerImpl;
 import symlab.core.task.FrameTrackingTask;
@@ -93,8 +92,8 @@ public class ArManager {
 
         taskReceiving.setCallback(new ReceivingTask.Callback() {
             @Override
-            public void onReceive(int resultID, Markers markers) {
-                markerManager.updateMarkers(markers, resultID);
+            public void onReceive(int resultID, MarkerGroup markerGroup) {
+                markerManager.updateMarkers(markerGroup, resultID);
             }
         });
     }

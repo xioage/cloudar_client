@@ -8,7 +8,6 @@ import android.graphics.Paint;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.Display;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -20,6 +19,7 @@ import org.rajawali3d.view.ISurface;
 import symlab.core.ArManager;
 import symlab.core.Constants;
 import symlab.core.adapter.RenderAdapter;
+import symlab.core.impl.MarkerGroup;
 
 
 public class MainActivity extends Activity implements View.OnTouchListener {
@@ -68,8 +68,8 @@ public class MainActivity extends Activity implements View.OnTouchListener {
 
         ArManager.getInstance().init(new RenderAdapter() {
             @Override
-            public void onMarkerChanged(Markers markers) {
-                mRenderer.onPosterChanged(markers);
+            public void onMarkerChanged(MarkerGroup markerGroup) {
+                mRenderer.onPosterChanged(markerGroup);
             }
 
             @Override
