@@ -18,14 +18,15 @@ import java.util.Queue;
 import symlab.cloudridar.HistoryTrackingPoints;
 import symlab.cloudridar.Markers;
 import symlab.core.Constants;
+import symlab.core.adapter.MarkerCallback;
 import symlab.core.adapter.RenderAdapter;
-import symlab.core.task.FrameTrackingTask;
+import symlab.core.task.TrackingTask;
 
 /**
  * Created by st0rm23 on 2017/2/20.
  */
 
-public class MarkerImpl implements FrameTrackingTask.Callback{
+public class MarkerImpl implements TrackingTask.Callback{
 
     private Markers markers;
     private boolean newMarkerFlag;
@@ -33,6 +34,10 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
     private int resultID;
     private Handler handler;
     private Queue<HistoryTrackingPoints> historyQueue ;
+    private MatOfPoint2f points1 = new MatOfPoint2f(new Mat(Constants.MAX_POINTS, 1, CvType.CV_32FC2));
+    private MatOfPoint2f points2 = new MatOfPoint2f(new Mat(Constants.MAX_POINTS, 1, CvType.CV_32FC2));
+
+
 
     public MarkerImpl(Handler handler){
         this.handler = handler;
@@ -49,7 +54,6 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
                    markersChanged = !Arrays.equals(MarkerImpl.this.markers.IDs, markers.IDs);
                 else
                    markersChanged = true;
-
                 if (!markersChanged && MarkerImpl.this.markers != null)
                     markers.TrackingPointsNums = MarkerImpl.this.markers.TrackingPointsNums;
 
@@ -62,17 +66,36 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         });
     }
 
-    private boolean isInside(Point point, Mat Rec) {
-        int i, j;
-        boolean result = false;
-
-        for (i = 0, j = 3; i < 4; j = i++) {
-            if ((Rec.get(i, 0)[1] > point.y) != (Rec.get(j, 0)[1] > point.y) &&
-                    (point.x < (Rec.get(j, 0)[0] - Rec.get(i, 0)[0]) * (point.y - Rec.get(i, 0)[1]) / (Rec.get(j, 0)[1] - Rec.get(i, 0)[1]) + Rec.get(i, 0)[0])) {
-                result = !result;
+    public void getMarkers(final MarkerCallback callback){
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (callback != null) callback.onResult(markers);
             }
+        });
+    }
+
+    private boolean isInside(Point point, Mat rect) {
+        double px = point.x;
+        double py = point.y;
+
+        int pointCount = rect.rows();
+        boolean isInside = true;
+
+        double dx1 = px - rect.get(pointCount - 1, 0)[0];
+        double dy1 = py - rect.get(pointCount - 1, 0)[1];
+        double dx2 = px - rect.get(0, 0)[0];
+        double dy2 = py - rect.get(0, 0)[1];
+        double sign = (dx1 * dy2 - dx2 * dy1) > 0 ? 1 : -1;
+        for (int k=1; k<pointCount; k++){
+            dx1 = px - rect.get(k-1, 0)[0];
+            dy1 = py - rect.get(k-1, 0)[1];
+            dx2 = px - rect.get(k, 0)[0];
+            dy2 = py - rect.get(k, 0)[1];
+            if (sign * (dx1 * dy2 - dx2 * dy1) <= 0 ) isInside = false;
         }
-        return result;
+
+        return isInside;
     }
 
     private MatOfPoint2f refineFeaturePoint(int[] standardBitmap, int totalValid, int[] oldBitmap, MatOfPoint2f oldFeaturePoint){
@@ -97,19 +120,23 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
             Mat homography = Calib3d.findHomography(oldFeatures, nowFeatures, Calib3d.RANSAC, 3);
             for (int m = 0; m < markers.Num; m++) markers.Homographys[m] = homography;
         } else {
-            MatOfPoint2f[] subPoints1 = new MatOfPoint2f[markers.Num];
-            MatOfPoint2f[] subPoints2 = new MatOfPoint2f[markers.Num];
+
             for (int m = 0; m < markers.Num; m++) {
-                subPoints1[m] = new MatOfPoint2f(new Mat(markers.TrackingPointsNums[m], 1, CvType.CV_32FC2));
-                subPoints2[m] = new MatOfPoint2f(new Mat(markers.TrackingPointsNums[m], 1, CvType.CV_32FC2));
+                if (markers.Recs[m] == null) continue; //out of bound
                 int count = 0;
-                for (int n = 0; n < nowFeatures.rows(); n++) {
-                    if (bitmap[n] == markers.IDs[m]) {
-                        subPoints1[m].put(count, 0, oldFeatures.get(n, 0));
-                        subPoints2[m].put(count++, 0, nowFeatures.get(n, 0));
+                int pointer = 0;
+                for (int n = 0; n < Constants.MAX_POINTS; n++) {
+                    if (bitmap[n] != 0){
+                        if (isInside(new Point(oldFeatures.get(pointer, 0)), markers.Recs[m])) {
+                            points1.put(count, 0, oldFeatures.get(pointer, 0));
+                            points2.put(count++, 0, nowFeatures.get(pointer, 0));
+                        }
+                        pointer++;
                     }
                 }
-                markers.Homographys[m] = Calib3d.findHomography(subPoints1[m], subPoints2[m], Calib3d.RANSAC, 3);
+                MatOfPoint2f subPoints1 = new MatOfPoint2f(points1.rowRange(0, count));
+                MatOfPoint2f subPoints2 = new MatOfPoint2f(points2.rowRange(0, count));
+                if (subPoints2.rows() >= 4) markers.Homographys[m] = Calib3d.findHomography(subPoints1, subPoints2, Calib3d.RANSAC, 3);
             }
         }
     }
@@ -135,7 +162,7 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
     };
 
     @Override
-    public void onStart(final int frameID, final byte[] frameData) {
+    public boolean onStart(final int frameID, final byte[] frameData) {
         if (shouldSample(frameID)){
             handler.post(new Runnable() {
                 @Override
@@ -143,7 +170,16 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
                     if (callback != null) callback.onSample(frameID, frameData);
                 }
             });
+            return true;
         }
+        return false;
+    }
+
+    @Override
+    public void onPreSwitch(int frameID, MatOfPoint2f switchFeatures, int[] bitmap, boolean isTriggered) {
+        trackingID++;
+        if (isTriggered)
+            historyQueue.add(new HistoryTrackingPoints(frameID, trackingID, switchFeatures, bitmap));
     }
 
     @Override
@@ -151,12 +187,10 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
         handler.post(new Runnable() {
             @Override
             public void run() {
-                if (preFeature == null){
-                    trackingID++;
-                } else {
+                if (preFeature != null) {
                     if (markers != null){
                         if (!newMarkerFlag){//rectify markers from previous frame
-                            findHomography(preFeature, features, bitmap, markers);
+                             findHomography(preFeature, features, bitmap, markers);
                         } else {//rectify markers from server
                             //Log.d(TAG, "frm " + frmID + " recover from " + resID);
                             HistoryTrackingPoints current;
@@ -181,12 +215,12 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
                                 Core.perspectiveTransform(markers.Recs[m], Recs2[m], markers.Homographys[m]);
                                 viewReady = true;
                             } else {
-                                Log.d(Constants.TAG, "null rec");
+                                Log.d(Constants.TAG, "null rec");  //if no homography then the recs will be null
                             }
                         }
                         markers.Recs = Recs2;
 
-                        if(Constants.ShowGL && viewReady) {
+                        if(Constants.ShowGL && viewReady) { //calculate glviewMatrix changed
                             MatOfPoint3f posterPoints = new MatOfPoint3f();
                             posterPoints.fromArray(Constants.posterPointsData[markers.IDs[0]]);
                             MatOfPoint2f scenePoints = new MatOfPoint2f(Recs2[0].clone());
@@ -225,10 +259,6 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
                         }
                     }
                 }
-
-                if (shouldSample(frameID)){
-                    historyQueue.add(new HistoryTrackingPoints(frameID, trackingID, features, bitmap));
-                }
             }
         });
     }
@@ -236,20 +266,8 @@ public class MarkerImpl implements FrameTrackingTask.Callback{
     @Override
     public int[] getInitializeBitmap(MatOfPoint2f feature) {
         int[] bitmap = new int[Constants.MAX_POINTS];
-        if (false == Constants.EnableMultipleTracking) {
-            for (int i = 0; i <feature.rows(); i++)
-                bitmap[i] = 1;
-        } else {
-            for (int i = 0; i < markers.Num; i++) {
-                for (int j = 0; j < Constants.MAX_POINTS; j++) {
-                    if (isInside(new Point(feature.get(j, 0)), markers.Recs[i])) {
-                        bitmap[j] = markers.IDs[i];
-                        markers.TrackingPointsNums[i]++;
-                    }
-                }
-                Log.v(Constants.TAG, "Marker " + markers.IDs[i] + " points num: " + markers.TrackingPointsNums[i]);
-            }
-        }
+        for (int i = 0; i <feature.rows(); i++)
+            bitmap[i] = 1;
         return bitmap;
     }
 

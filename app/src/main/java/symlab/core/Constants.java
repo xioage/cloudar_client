@@ -37,9 +37,10 @@ public class Constants {
     static public final double[][] cvToGlData = new double[][]{{1.0, 0, 0, 0}, {0, -1.0, 0, 0}, {0, 0, -1.0, 0}, {0, 0, 0, 1.0}};
 
     static public final MatOfInt Image_Params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 50);
-    static public final int TRACKING_THRESHOLD = 4;
+    static public final int TRACKING_THRESHOLD = 10;
+    static public final int SWITCH_THRESHOLD = 20;
 
-    static public final boolean EnableMultipleTracking = false;
+    static public final boolean EnableMultipleTracking = true;
     static public final boolean ShowGL = true;
     static public final boolean Show2DView = true;
 

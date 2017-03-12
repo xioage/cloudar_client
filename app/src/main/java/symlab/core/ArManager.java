@@ -2,7 +2,6 @@ package symlab.core;
 
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.util.Log;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -10,9 +9,10 @@ import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 
 import symlab.cloudridar.Markers;
+import symlab.core.adapter.MarkerCallback;
 import symlab.core.adapter.RenderAdapter;
 import symlab.core.impl.MarkerImpl;
-import symlab.core.task.FrameTrackingTask;
+import symlab.core.task.TrackingTask;
 import symlab.core.task.ReceivingTask;
 import symlab.core.task.TransmissionTask;
 
@@ -30,7 +30,7 @@ public class ArManager {
     private Handler handlerNetwork;
     private Handler[] handlerFrame;
 
-    private FrameTrackingTask[] taskFrame;
+    private TrackingTask[] taskFrame;
     private ReceivingTask taskReceiving;
     private TransmissionTask taskTransmission;
     private MarkerImpl markerManager;
@@ -75,9 +75,9 @@ public class ArManager {
         markerManager = new MarkerImpl(handlerUtil);
         taskTransmission = new TransmissionTask(dataChannel, serverAddr);
         taskReceiving = new ReceivingTask(dataChannel);
-        taskFrame = new FrameTrackingTask[FRAME_THREAD_SIZE];
+        taskFrame = new TrackingTask[FRAME_THREAD_SIZE];
         for (int i = 0; i< FRAME_THREAD_SIZE; i++){
-            taskFrame[i] = new FrameTrackingTask();
+            taskFrame[i] = new TrackingTask();
             taskFrame[i].setCallback(markerManager);
         }
 
@@ -129,12 +129,17 @@ public class ArManager {
 
     public void driveFrame(byte[] frameData){
         int taskId = frameID % FRAME_THREAD_SIZE;
-        FrameTrackingTask task = taskFrame[taskId];
+        TrackingTask task = taskFrame[taskId];
         if (task.isBusy()) return;
         task.setFrameData(++frameID, frameData);
         handlerFrame[taskId].post(task);
 
         handlerNetwork.post(taskReceiving);
+    }
+
+    public void getMarkers(MarkerCallback callback){
+        if (markerManager == null) return ;
+        markerManager.getMarkers(callback);
     }
 
     public int frameSnapshot(){

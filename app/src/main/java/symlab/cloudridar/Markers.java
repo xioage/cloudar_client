@@ -22,4 +22,14 @@ public class Markers {
         this.Homographys = new Mat[Num];
         this.TrackingPointsNums = new int[Num];
     }
+
+    public Markers clone(){
+        Markers newMarker = new Markers(Num);
+        newMarker.IDs = IDs.clone();
+        newMarker.Names = Names.clone();
+        newMarker.Recs = Recs.clone();
+        newMarker.Homographys = Homographys.clone();
+        newMarker.TrackingPointsNums = TrackingPointsNums.clone();
+        return newMarker;
+    }
 }

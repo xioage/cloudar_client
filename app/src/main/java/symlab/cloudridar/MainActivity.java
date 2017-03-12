@@ -14,11 +14,13 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 
 import org.rajawali3d.view.ISurface;
 
 import symlab.core.ArManager;
 import symlab.core.Constants;
+import symlab.core.adapter.MarkerCallback;
 import symlab.core.adapter.RenderAdapter;
 
 
@@ -35,6 +37,7 @@ public class MainActivity extends Activity implements View.OnTouchListener {
     private DrawOnTop mDraw;
     private byte[] callbackBuffer;
     private int time_o, time_n, fps;
+    private Markers markers;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,7 +63,7 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         }
 
         if (Constants.ShowGL) {
-            mRenderSurface = (ISurface) findViewById(R.id.rajwali_surface);
+            mRenderSurface = (org.rajawali3d.view.SurfaceView) findViewById(R.id.rajwali_surface);
             mRenderer = new PosterRenderer(this, Constants.scale);
             mRenderSurface.setSurfaceRenderer(mRenderer);
             ((View) mRenderSurface).setOnTouchListener(this);
@@ -190,15 +193,30 @@ public class MainActivity extends Activity implements View.OnTouchListener {
             count++;
             if (count % 30 == 1) {
                 mDraw.updateData(ArManager.getInstance().frameSnapshot());
-                mDraw.invalidate();
             }
+            ArManager.getInstance().getMarkers(new MarkerCallback() {
+                @Override
+                public void onResult(final Markers markers) {
+                    mDraw.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            MainActivity.this.markers = markers;
+                            mDraw.invalidate();
+                        }
+                    });
+                }
+            });
         }
     };
 
     class DrawOnTop extends View {
         Paint paintWord;
+        Paint paintLine;
         private boolean ShowFPS = true;
+        private boolean ShowEdge = true;
+        private boolean ShowName = true;
         private int preFrameID;
+        private int dispScale = Constants.scale;
 
         public DrawOnTop(Context context) {
             super(context);
@@ -209,6 +227,12 @@ public class MainActivity extends Activity implements View.OnTouchListener {
             paintWord.setColor(Color.RED);
             paintWord.setTextAlign(Paint.Align.CENTER);
             paintWord.setTextSize(50);
+
+
+            paintLine = new Paint();
+            paintLine.setStyle(Paint.Style.STROKE);
+            paintLine.setStrokeWidth(10);
+            paintLine.setColor(Color.GREEN);
         }
 
         public void updateData(int frameID){
@@ -221,11 +245,26 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         }
 
         @Override
-        protected void onDraw(Canvas canvas) {
+        protected void onDraw(final Canvas canvas) {
             super.onDraw(canvas);
 
             if (ShowFPS) {
                 canvas.drawText("fps: " + fps, 100, 50, paintWord);
+            }
+            if (ShowEdge ) {
+                if (markers != null && markers.Num != 0){
+                    float[][] points = new float[4][2];
+                    for (int i = 0; i < markers.Num; i++) {
+                        if (markers.Recs[i] == null) continue;
+                        for (int j = 0; j < 4; j++)
+                            markers.Recs[i].get(j, 0, points[j]);
+                        for (int j = 0; j < 4; j++) {
+                            canvas.drawLine(dispScale * points[j][0], dispScale * points[j][1], dispScale * points[(j + 1) % 4][0], dispScale * points[(j + 1) % 4][1], paintLine);
+                        }
+                        if(ShowName)
+                            canvas.drawText(markers.Names[i], dispScale * points[0][0] + 400, dispScale * points[0][1] + 200, paintWord);
+                    }
+                }
             }
         }
     }

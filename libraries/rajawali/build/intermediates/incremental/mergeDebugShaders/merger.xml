@@ -1,2 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<merger version="3"><dataSet config="main"><source path="D:\sdk_project\cloudridar_movieapp_client.git\libraries\rajawali\src\main\shaders"/></dataSet><dataSet config="debug"><source path="D:\sdk_project\cloudridar_movieapp_client.git\libraries\rajawali\src\debug\shaders"/></dataSet></merger>
+<merger version="3"><dataSet config="main"><source path="E:\project\android\cloudridar_movieapp_client\libraries\rajawali\src\main\shaders"/></dataSet><dataSet config="debug"><source path="E:\project\android\cloudridar_movieapp_client\libraries\rajawali\src\debug\shaders"/></dataSet></merger>
