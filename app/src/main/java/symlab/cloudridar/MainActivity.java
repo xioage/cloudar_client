@@ -18,18 +18,21 @@ import android.widget.Button;
 
 import org.rajawali3d.view.ISurface;
 
+import java.util.ArrayList;
+
 import symlab.core.ArManager;
 import symlab.core.Constants;
 import symlab.core.adapter.MarkerCallback;
 import symlab.core.adapter.RenderAdapter;
+import symlab.core.impl.MarkerImpl;
 
 
-public class MainActivity extends Activity implements View.OnTouchListener {
+public class MainActivity extends Activity {
 
     private SurfaceView mPreview;
     private SurfaceHolder mPreviewHolder;
     protected ISurface mRenderSurface;
-    protected PosterRenderer mRenderer;
+    protected MyRenderer mRenderer;
 
     private Camera mCamera;
     private boolean mInPreview = false;
@@ -64,20 +67,14 @@ public class MainActivity extends Activity implements View.OnTouchListener {
 
         if (Constants.ShowGL) {
             mRenderSurface = (org.rajawali3d.view.SurfaceView) findViewById(R.id.rajwali_surface);
-            mRenderer = new PosterRenderer(this, Constants.scale);
+            mRenderer = new MyRenderer(this, Constants.scale);
             mRenderSurface.setSurfaceRenderer(mRenderer);
-            ((View) mRenderSurface).setOnTouchListener(this);
         }
 
         ArManager.getInstance().init(new RenderAdapter() {
             @Override
-            public void onMarkerChanged(Markers markers) {
-                mRenderer.onPosterChanged(markers);
-            }
-
-            @Override
-            public void onRender(double[] glViewMatrix) {
-                mRenderer.setGlViewMatrix(glViewMatrix);
+            public void onRender(ArrayList<MarkerImpl.Marker> markers) {
+                mRenderer.updateMarker(markers);
             }
         });
     }
@@ -102,8 +99,6 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         Log.i(Constants.TAG, " onPause() called.");
         super.onPause();
 
-        if (Constants.ShowGL)
-            mRenderer.onActivityPause();
 
         if (mInPreview)
             mCamera.stopPreview();
@@ -128,15 +123,6 @@ public class MainActivity extends Activity implements View.OnTouchListener {
         super.onDestroy();
     }
 
-    @Override
-    public boolean onTouch(View v, MotionEvent event) {
-        Log.d(Constants.TAG, "touch event");
-        if (Constants.ShowGL && event.getAction() == MotionEvent.ACTION_DOWN) {
-            mRenderer.getObjectAt(event.getX(), event.getY());
-        }
-
-        return this.onTouchEvent(event);
-    }
 
     private void initPreview(int width, int height) {
         Log.i(Constants.TAG, "initPreview() called");

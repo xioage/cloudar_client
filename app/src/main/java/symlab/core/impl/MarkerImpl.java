@@ -2,15 +2,21 @@ package symlab.core.impl;
 
 import android.os.Handler;
 import android.util.Log;
+import android.util.Pair;
+
+import com.google.android.gms.appdatasearch.Feature;
 
 import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.MatOfPoint3f;
 import org.opencv.core.Point;
+import org.rajawali3d.math.Matrix;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -28,40 +34,42 @@ import symlab.core.task.TrackingTask;
 
 public class MarkerImpl implements TrackingTask.Callback{
 
-    private Markers markers;
+    private ArrayList<Marker> markers;
     private boolean newMarkerFlag;
     private int trackingID;
-    private int resultID;
+    private int markerFrameId;
     private Handler handler;
     private Queue<HistoryTrackingPoints> historyQueue ;
     private MatOfPoint2f points1 = new MatOfPoint2f(new Mat(Constants.MAX_POINTS, 1, CvType.CV_32FC2));
     private MatOfPoint2f points2 = new MatOfPoint2f(new Mat(Constants.MAX_POINTS, 1, CvType.CV_32FC2));
 
-
+    private ArrayList<Marker> origin;
 
     public MarkerImpl(Handler handler){
         this.handler = handler;
         historyQueue = new LinkedList<HistoryTrackingPoints>();
     }
 
-    public void updateMarkers(final Markers markers, final int resultID){
-        if (markers == null || markers.Num == 0) return;
+    public void updateMarkers(final ArrayList<Marker> markers, final int markerFrameId){
+        if (markers == null || markers.size() == 0) return;
         handler.post(new Runnable() {
             @Override
             public void run() {
-                boolean markersChanged = false;
-                if (MarkerImpl.this.markers != null)
-                   markersChanged = !Arrays.equals(MarkerImpl.this.markers.IDs, markers.IDs);
-                else
-                   markersChanged = true;
+                /*
+                boolean markersChanged = true;
+                if (MarkerImpl.this.markers != null && Arrays.equals(MarkerImpl.this.markers.IDs, markers.IDs))
+                   markersChanged = false;
                 if (!markersChanged && MarkerImpl.this.markers != null)
                     markers.TrackingPointsNums = MarkerImpl.this.markers.TrackingPointsNums;
 
                 if (markersChanged && adapter != null) adapter.onMarkerChanged(markers);
-
+                origin = new ArrayList<Marker>();
+                for (Marker marker : markers)
+                    origin.add(marker.clone());
+                    */
                 newMarkerFlag = true;
                 MarkerImpl.this.markers = markers;
-                MarkerImpl.this.resultID = resultID;
+                MarkerImpl.this.markerFrameId = markerFrameId;
             }
         });
     }
@@ -70,7 +78,10 @@ public class MarkerImpl implements TrackingTask.Callback{
         handler.post(new Runnable() {
             @Override
             public void run() {
-                if (callback != null) callback.onResult(markers);
+                /*
+                if (callback != null && markers != null)
+                    callback.onResult(markers.clone());
+                */
             }
         });
     }
@@ -115,55 +126,119 @@ public class MarkerImpl implements TrackingTask.Callback{
         return refinedFeature;
     }
 
-    private void findHomography(MatOfPoint2f oldFeatures, MatOfPoint2f nowFeatures, int[] bitmap, Markers markers){
+    private MatOfPoint2f getHistoryFeatures(int frameId, int trackingId, int[] nowBitmap, int nowCount){
+        HistoryTrackingPoints current;
+        while ((current = historyQueue.poll()).HistoryFrameID != frameId);
+        if (current == null || current.HistoryTrackingID != trackingId) {
+            Log.e(Constants.TAG, "tried to recover from late result, tracking points not match");
+            return null;
+        }
+        return refineFeaturePoint(nowBitmap, nowCount, current.historybitmap, current.HistoryPoints);
+    }
+
+    private void findHomography(MatOfPoint2f oldFeatures, MatOfPoint2f nowFeatures, int[] bitmap, ArrayList<Marker> markers){
         if (!Constants.EnableMultipleTracking) {
             Mat homography = Calib3d.findHomography(oldFeatures, nowFeatures, Calib3d.RANSAC, 3);
-            for (int m = 0; m < markers.Num; m++) markers.Homographys[m] = homography;
+            for (Marker marker : markers) marker.homography = homography;
         } else {
-
-            for (int m = 0; m < markers.Num; m++) {
-                if (markers.Recs[m] == null) continue; //out of bound
+            for (Marker marker : markers){
+                if (!marker.isValid) continue;
                 int count = 0;
                 int pointer = 0;
                 for (int n = 0; n < Constants.MAX_POINTS; n++) {
                     if (bitmap[n] != 0){
-                        if (isInside(new Point(oldFeatures.get(pointer, 0)), markers.Recs[m])) {
+                        if (isInside(new Point(oldFeatures.get(pointer, 0)), marker.vertices)) {
                             points1.put(count, 0, oldFeatures.get(pointer, 0));
-                            points2.put(count++, 0, nowFeatures.get(pointer, 0));
+                            points2.put(count, 0, nowFeatures.get(pointer, 0));
+                            count++;
                         }
                         pointer++;
                     }
                 }
                 MatOfPoint2f subPoints1 = new MatOfPoint2f(points1.rowRange(0, count));
                 MatOfPoint2f subPoints2 = new MatOfPoint2f(points2.rowRange(0, count));
-                if (subPoints2.rows() >= 4) markers.Homographys[m] = Calib3d.findHomography(subPoints1, subPoints2, Calib3d.RANSAC, 3);
+                if (count >= 4) {
+                    /*
+                    Log.v("number", String.format("%d", count));
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("old subPoints\n");
+                    for (int i=0; i<subPoints1.rows(); i++){
+                        sb.append(String.format("(%f, %f),\n", subPoints1.get(i, 0)[0], subPoints1.get(i, 0)[1]));
+                    }
+                    sb.append("new subPoints\n");
+                    for (int i=0; i<subPoints1.rows(); i++){
+                        sb.append(String.format("(%f, %f),\n", subPoints2.get(i, 0)[0], subPoints2.get(i, 0)[1]));
+                    }
+                    Log.v("marker subPoints", sb.toString());
+                    */
+                    marker.homography = Calib3d.findHomography(subPoints1, subPoints2, Calib3d.RANSAC, 3);
+                }
+                else {
+                    marker.isValid = false;
+                    /*
+                    StringBuilder sb = new StringBuilder();
+                    sb.append(String.format("total %d\n", oldFeatures.rows()));
+                    for (int i=0; i<oldFeatures.rows(); i++){
+                        sb.append(String.format("(%f, %f),\n", oldFeatures.get(i, 0)[0],oldFeatures.get(i, 0)[1]));
+                    }
+                    for (Marker tmp : markers){
+                        sb.append(String.format("vertices \n"));
+                        for (int j=0; j<tmp.vertices.rows(); j++){
+                            sb.append(String.format("(%f, %f),\n", tmp.vertices.get(j, 0)[0], tmp.vertices.get(j, 0)[1]));
+                        }
+                    }
+
+
+                    for (Marker tmp : origin){
+                        sb.append(String.format("origin \n"));
+                        for (int j=0; j<tmp.vertices.rows(); j++){
+                            sb.append(String.format("(%f, %f),\n", tmp.vertices.get(j, 0)[0], tmp.vertices.get(j, 0)[1]));
+                        }
+                    }
+                    Log.v("not valid", sb.toString());
+                    */
+
+                }
             }
         }
     }
 
-    private boolean isInsideViewport(MatOfPoint2f points){
-        float x, y;
-        float[] xy = new float[2];
-        x = y = 0;
-        for(int i = 0; i < 4; i++)
-        {
-            points.get(i, 0, xy);
-            x += xy[0];
-            y += xy[1];
+    private void transformBound(ArrayList<Marker> markers){
+        for (Marker marker : markers){
+            if(marker.isValid) {
+                MatOfPoint2f newRecs = new MatOfPoint2f();
+                Core.perspectiveTransform(marker.vertices, newRecs, marker.homography);
+                marker.vertices = newRecs;
+            } else {
+                Log.d(Constants.TAG, "null rec");  //if no homography then the recs will be null
+            }
         }
-        x /= 4;
-        y /= 4;
-
-        return  !(x < 0 || y < 0 || x > Constants.previewWidth/Constants.scale || y > Constants.previewHeight/Constants.scale);
     }
 
-    private boolean shouldSample(int frameID){
-        return frameID % Constants.FREQUENCY == 10;
-    };
+    private void calcModelMatrix(ArrayList<Marker> markers){
+        for (Marker marker : markers){
+            if (marker.origin == null || !marker.isValid) continue;
+            Mat rvec = new Mat();
+            Mat tvec = new Mat();
+            Calib3d.solvePnP(marker.origin, marker.vertices, Constants.cameraMatrix, Constants.distCoeffs, rvec, tvec);
+
+            double[] rotation = new double[3];
+            double[] translation = new double[3];
+
+
+            for (int i=0; i<3; i++) {
+                rotation[i] = rvec.get(i, 0)[0];
+                translation[i] = -tvec.get(i, 0)[0];
+            }
+            rotation[0] = -rotation[0];
+            translation[0] = -translation[0];
+            marker.orientation = new Pair<>(translation, rotation);
+        }
+    }
 
     @Override
     public boolean onStart(final int frameID, final byte[] frameData) {
-        if (shouldSample(frameID)){
+        if (frameID % Constants.FREQUENCY == 10){
             handler.post(new Runnable() {
                 @Override
                 public void run() {
@@ -176,10 +251,15 @@ public class MarkerImpl implements TrackingTask.Callback{
     }
 
     @Override
-    public void onPreSwitch(int frameID, MatOfPoint2f switchFeatures, int[] bitmap, boolean isTriggered) {
-        trackingID++;
-        if (isTriggered)
-            historyQueue.add(new HistoryTrackingPoints(frameID, trackingID, switchFeatures, bitmap));
+    public void onPreSwitch(final int frameID, final MatOfPoint2f switchFeatures, final int[] bitmap, final boolean isTriggered) {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                trackingID++;
+                if (isTriggered)
+                    historyQueue.add(new HistoryTrackingPoints(frameID, trackingID, switchFeatures, bitmap));
+            }
+        });
     }
 
     @Override
@@ -187,88 +267,21 @@ public class MarkerImpl implements TrackingTask.Callback{
         handler.post(new Runnable() {
             @Override
             public void run() {
-                if (preFeature != null) {
-                    if (markers != null){
-                        if (!newMarkerFlag){//rectify markers from previous frame
-                             findHomography(preFeature, features, bitmap, markers);
-                        } else {//rectify markers from server
-                            //Log.d(TAG, "frm " + frmID + " recover from " + resID);
-                            HistoryTrackingPoints current;
-                            while ((current = historyQueue.poll()).HistoryFrameID != resultID);
-
-                            int count = features.rows();
-                            if (current.HistoryTrackingID == trackingID) {
-                                current.HistoryPoints = refineFeaturePoint(bitmap, count, current.historybitmap, current.HistoryPoints);
-                                findHomography(current.HistoryPoints, features, bitmap, markers);
-                            } else {
-                                Log.e(Constants.TAG, "tried to recover from late result, tracking points not match");
-                            }
-                            newMarkerFlag = false;
-                        }
-
-                        boolean viewReady = false;
-
-                        MatOfPoint2f[] Recs2 = new MatOfPoint2f[markers.Num];
-                        for (int m = 0; m < markers.Num; m++) {
-                            if(markers.Recs[m] != null && markers.Homographys[m] != null) {
-                                Recs2[m] = new MatOfPoint2f();
-                                Core.perspectiveTransform(markers.Recs[m], Recs2[m], markers.Homographys[m]);
-                                viewReady = true;
-                            } else {
-                                Log.d(Constants.TAG, "null rec");  //if no homography then the recs will be null
-                            }
-                        }
-                        markers.Recs = Recs2;
-
-                        if(Constants.ShowGL && viewReady) { //calculate glviewMatrix changed
-                            MatOfPoint3f posterPoints = new MatOfPoint3f();
-                            posterPoints.fromArray(Constants.posterPointsData[markers.IDs[0]]);
-                            MatOfPoint2f scenePoints = new MatOfPoint2f(Recs2[0].clone());
-
-                            if(false == isInsideViewport(scenePoints)) {
-                                Log.d(Constants.TAG, "marker out of view, lost tracking");
-                                if (adapter != null) adapter.onMarkerChanged(null);
-                            }
-                            else {
-                                Mat rvec = new Mat();
-                                Mat tvec = new Mat();
-                                Calib3d.solvePnP(posterPoints, scenePoints, Constants.cameraMatrix, Constants.distCoeffs, rvec, tvec);
-
-                                Mat viewMatrix = Mat.zeros(4, 4, CvType.CV_64FC1);
-                                Mat rotation = new Mat();
-                                Calib3d.Rodrigues(rvec, rotation);
-                                for (int row = 0; row < 3; row++) {
-                                    for (int col = 0; col < 3; col++) {
-                                        viewMatrix.put(row, col, rotation.get(row, col));
-                                    }
-                                    viewMatrix.put(row, 3, tvec.get(row, 0));
-                                }
-                                viewMatrix.put(3, 3, 1.0);
-                                Core.gemm(Constants.cvToGl, viewMatrix, 1, new Mat(), 0, viewMatrix, 0);
-
-                                double[] glViewMatrixData = new double[16];
-                                for (int col = 0; col < 4; col++)
-                                    for (int row = 0; row < 4; row++)
-                                        glViewMatrixData[col * 4 + row] = viewMatrix.get(row, col)[0];
-                                if (adapter != null) adapter.onRender(glViewMatrixData);
-
-                                //tsLong = System.currentTimeMillis();
-                                //String ts_showResult = tsLong.toString();
-                                //Log.d(Eval, "frm " + frmID + " showed: " + ts_showResult);
-                            }
-                        }
+                MatOfPoint2f oldFeatures = newMarkerFlag ? getHistoryFeatures(markerFrameId, trackingID, bitmap, features.rows()) : preFeature;
+                newMarkerFlag = false;
+                if (oldFeatures != null && markers != null) {
+                    findHomography(oldFeatures, features, bitmap, markers);
+                    transformBound(markers);
+                    calcModelMatrix(markers);
+                    if (adapter != null) {
+                        ArrayList arrayList = new ArrayList();
+                        for (Marker marker : markers)
+                            if (marker.isValid) arrayList.add(marker.clone());
+                        adapter.onRender(arrayList);
                     }
                 }
             }
         });
-    }
-
-    @Override
-    public int[] getInitializeBitmap(MatOfPoint2f feature) {
-        int[] bitmap = new int[Constants.MAX_POINTS];
-        for (int i = 0; i <feature.rows(); i++)
-            bitmap[i] = 1;
-        return bitmap;
     }
 
     private RenderAdapter adapter;
@@ -285,5 +298,41 @@ public class MarkerImpl implements TrackingTask.Callback{
 
     public interface Callback {
         void onSample(int frameId, byte[] frameData);
+    }
+
+
+    static public class Marker{
+        private int id;
+        private final MatOfPoint3f origin;
+        private MatOfPoint2f vertices;
+        private Mat homography;
+        private Pair<double[], double[]> orientation;
+        private boolean isValid;
+
+        public Marker(int id, MatOfPoint3f origin, MatOfPoint2f vertices){
+            this.id = id;
+            this.origin = origin;
+            this.vertices = vertices;
+            this.isValid = true;
+        }
+
+        public int getId(){
+            return id;
+        }
+
+        public Marker clone(){
+            Marker marker = new Marker(id, origin, new MatOfPoint2f(vertices.clone()));
+            if (orientation != null)
+                marker.orientation = new Pair<>(orientation.first.clone(), orientation.second.clone());
+            return marker;
+        }
+
+        public Pair<double[], double[]> getOrientation(){
+            return orientation;
+        }
+
+        public boolean isValid(){
+            return isValid;
+        }
     }
 }

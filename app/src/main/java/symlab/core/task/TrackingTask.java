@@ -66,8 +66,8 @@ public class TrackingTask implements Runnable{
         int totalValid = 0;
         for (int x : statusArray) totalValid += x;
 
-        MatOfPoint2f refinedPrePoint = new MatOfPoint2f(prePoint.rowRange(0, totalValid));
-        MatOfPoint2f refinedNextPoint = new MatOfPoint2f(nextPoint.rowRange(0, totalValid));
+        MatOfPoint2f refinedPrePoint = new MatOfPoint2f(new Mat(totalValid, 1, prePoint.type()));
+        MatOfPoint2f refinedNextPoint = new MatOfPoint2f(new Mat(totalValid, 1, nextPoint.type()));
 
         int iterator = 0, refinedCount = 0;
         for (int i = 0; i< Constants.MAX_POINTS; i++){ //计算剩下的枚举器
@@ -95,12 +95,8 @@ public class TrackingTask implements Runnable{
         MatOfPoint2f points = new MatOfPoint2f(initial.toArray());
         Imgproc.cornerSubPix(GRAYMat, points, Constants.subPixWinSize, new org.opencv.core.Size(-1, -1), Constants.termcrit);
 
-        int[] bitmap = null;
-        if (callback != null) bitmap = callback.getInitializeBitmap(points);
-        if (bitmap == null){
-            bitmap = new int[Constants.MAX_POINTS];
-            for (int i = 0; i < points.rows(); i++) bitmap[i] = 1;
-        }
+        int[] bitmap = new int[Constants.MAX_POINTS];
+        for (int i = 0; i < points.rows(); i++) bitmap[i] = 1;
         return new Pair<MatOfPoint2f, int[]>(points, bitmap);
     }
 
@@ -143,7 +139,7 @@ public class TrackingTask implements Runnable{
                 newTrackModel.features = optFlow.first.second;
                 newTrackModel.bitmap = optFlow.second;
                 if (callback != null)
-                    callback.onFinish(frameID, optFlow.first.first, new MatOfPoint2f(newTrackModel.features), newTrackModel.bitmap.clone());
+                    callback.onFinish(frameID, optFlow.first.first, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone());
                 canTrack = true;
             } else canTrack = false;
         }
@@ -156,10 +152,10 @@ public class TrackingTask implements Runnable{
             if (callback != null){
                 if (optFlow != null && optFlow.first.first.rows() > Constants.TRACKING_THRESHOLD) { //optFlow can be used
                     callback.onFinish(frameID, optFlow.first.first, optFlow.first.second, optFlow.second);
-                    callback.onPreSwitch(frameID, new MatOfPoint2f(newTrackModel.features), newTrackModel.bitmap.clone(), needSwitch);
+                    callback.onPreSwitch(frameID, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone(), needSwitch);
                 } else  {//optFlow can not be used
-                    callback.onPreSwitch(frameID, new MatOfPoint2f(newTrackModel.features), newTrackModel.bitmap.clone(), needSwitch);
-                    callback.onFinish(frameID, null, new MatOfPoint2f(newTrackModel.features), newTrackModel.bitmap.clone());
+                    callback.onPreSwitch(frameID, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone(), needSwitch);
+                    callback.onFinish(frameID, null, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone());
                 }
             }
         }
@@ -177,7 +173,6 @@ public class TrackingTask implements Runnable{
         boolean onStart(int frameID, byte[] frameData);
         void onPreSwitch(int frameID, MatOfPoint2f switchFeatures, int[] bitmap, boolean isTriggered);
         void onFinish(int frameID, MatOfPoint2f preFeature, MatOfPoint2f nowFeatures, int[] bitmap);
-        int[] getInitializeBitmap(MatOfPoint2f feature);
     }
 
     private static class TrackModel{

@@ -2,11 +2,16 @@ package symlab.core;
 
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Process;
+
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint3f;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
+import java.util.ArrayList;
 
 import symlab.cloudridar.Markers;
 import symlab.core.adapter.MarkerCallback;
@@ -48,8 +53,8 @@ public class ArManager {
         return instance;
     }
 
-    private Handler createAndStartThread(String name){
-        HandlerThread handlerThread = new HandlerThread(name);
+    private Handler createAndStartThread(String name, int priority){
+        HandlerThread handlerThread = new HandlerThread(name, priority);
         handlerThread.start();
         return new Handler(handlerThread.getLooper());
     }
@@ -65,11 +70,11 @@ public class ArManager {
         } catch (Exception e) {
         }
 
-        this.handlerUtil = createAndStartThread("util thread"); //start util thread
-        this.handlerNetwork = createAndStartThread("network thread");
+        this.handlerUtil = createAndStartThread("util thread", Process.THREAD_PRIORITY_DEFAULT); //start util thread
+        this.handlerNetwork = createAndStartThread("network thread", 1);
         this.handlerFrame = new Handler[FRAME_THREAD_SIZE];
         for (int i = 0; i< FRAME_THREAD_SIZE; i++){ //start frame processing thread
-            this.handlerFrame[i] = createAndStartThread(String.format("frame thread %d", i));
+            this.handlerFrame[i] = createAndStartThread(String.format("frame thread %d", i), -1);
         }
 
         markerManager = new MarkerImpl(handlerUtil);
@@ -94,7 +99,13 @@ public class ArManager {
         taskReceiving.setCallback(new ReceivingTask.Callback() {
             @Override
             public void onReceive(int resultID, Markers markers) {
-                markerManager.updateMarkers(markers, resultID);
+                ArrayList<MarkerImpl.Marker> arrayList = new ArrayList<MarkerImpl.Marker>();
+                for (int i=0; i<markers.Num; i++){
+                    MatOfPoint3f origin = new MatOfPoint3f();
+                    origin.fromArray(Constants.posterPointsData[markers.IDs[0]]);
+                    arrayList.add(new MarkerImpl.Marker(markers.IDs[i], origin,  markers.Recs[i]));
+                }
+                markerManager.updateMarkers(arrayList, resultID);
             }
         });
     }
