@@ -8,13 +8,10 @@ import android.graphics.Paint;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.Display;
-import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 
 import org.rajawali3d.view.ISurface;
 
@@ -22,7 +19,6 @@ import java.util.ArrayList;
 
 import symlab.core.ArManager;
 import symlab.core.Constants;
-import symlab.core.adapter.MarkerCallback;
 import symlab.core.adapter.RenderAdapter;
 import symlab.core.impl.MarkerImpl;
 
@@ -40,7 +36,6 @@ public class MainActivity extends Activity {
     private DrawOnTop mDraw;
     private byte[] callbackBuffer;
     private int time_o, time_n, fps;
-    private Markers markers;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -224,21 +219,6 @@ public class MainActivity extends Activity {
 
             if (ShowFPS) {
                 canvas.drawText("fps: " + fps, 100, 50, paintWord);
-            }
-            if (ShowEdge ) {
-                if (markers != null && markers.Num != 0){
-                    float[][] points = new float[4][2];
-                    for (int i = 0; i < markers.Num; i++) {
-                        if (markers.Recs[i] == null) continue;
-                        for (int j = 0; j < 4; j++)
-                            markers.Recs[i].get(j, 0, points[j]);
-                        for (int j = 0; j < 4; j++) {
-                            canvas.drawLine(dispScale * points[j][0], dispScale * points[j][1], dispScale * points[(j + 1) % 4][0], dispScale * points[(j + 1) % 4][1], paintLine);
-                        }
-                        if(ShowName)
-                            canvas.drawText(markers.Names[i], dispScale * points[0][0] + 400, dispScale * points[0][1] + 200, paintWord);
-                    }
-                }
             }
         }
     }

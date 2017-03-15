@@ -1,6 +1,5 @@
 package symlab.core.impl;
 
-import android.opengl.Matrix;
 import android.os.Handler;
 
 import org.opencv.calib3d.Calib3d;
@@ -17,8 +16,6 @@ import java.util.Queue;
 
 import symlab.cloudridar.HistoryTrackingPoints;
 import symlab.core.Constants;
-import symlab.core.adapter.MarkerCallback;
-import symlab.core.adapter.RenderAdapter;
 import symlab.core.task.TrackingTask;
 
 /**

@@ -2,7 +2,7 @@ package symlab.core.adapter;
 
 import java.util.ArrayList;
 
-import symlab.cloudridar.Markers;
+import symlab.core.impl.MarkerGroup;
 import symlab.core.impl.MarkerImpl;
 
 /**

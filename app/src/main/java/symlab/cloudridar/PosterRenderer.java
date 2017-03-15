@@ -1,54 +1,34 @@
 package symlab.cloudridar;
 
 import android.content.Context;
-import android.content.Intent;
-import android.graphics.Color;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.net.Uri;
 import android.util.Log;
 import android.view.MotionEvent;
 
 import org.rajawali3d.Object3D;
-import org.rajawali3d.lights.DirectionalLight;
 import org.rajawali3d.lights.PointLight;
-import org.rajawali3d.materials.Material;
-import org.rajawali3d.materials.methods.DiffuseMethod;
-import org.rajawali3d.materials.textures.ATexture;
-import org.rajawali3d.materials.textures.AlphaMapTexture;
-import org.rajawali3d.materials.textures.StreamingTexture;
-import org.rajawali3d.materials.textures.Texture;
-import org.rajawali3d.math.Matrix4;
-import org.rajawali3d.math.vector.Vector3;
-import org.rajawali3d.primitives.Plane;
-import org.rajawali3d.primitives.RectangularPrism;
-import org.rajawali3d.primitives.Sphere;
 import org.rajawali3d.renderer.Renderer;
 import org.rajawali3d.util.ObjectColorPicker;
 import org.rajawali3d.util.OnObjectPickedListener;
 import org.rajawali3d.util.RajLog;
 
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
+
+import symlab.core.impl.MarkerGroup;
+import symlab.core.renderer.MyCamera;
 
 /**
  * Created by wzhangal on 7/27/2016.
  */
 public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     private int scale;
-    private int trailerNum = 0;
-    private double[] projectionMatrix = new double[16];
-    private double[] glViewMatrixData = new double[16];
-    private Trailer[] trailers = new Trailer[3];
+    private MyCamera mCamera = new MyCamera();
     private ObjectColorPicker mPicker;
-    private double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
-    private String url = "rtsp://";
-    private String TAG = "PosterRenderer";
-
-    private boolean onlineVideo = false;
-    private boolean enableVideo = true;
+    private Trailer[] trailers = new Trailer[2];
+    private List<Integer> curMarkerIDs = new ArrayList<>();
 
     public PosterRenderer(Context context, int scale) {
         super(context);
@@ -57,7 +37,6 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
 
     @Override
     protected void initScene() {
-        Log.d(TAG, "initScene called()");
         PointLight light = new PointLight();
         light.setPosition(10, 0, 3);
         light.setLookAt(0, 0, -1);
@@ -67,22 +46,25 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
         mPicker = new ObjectColorPicker(this);
         mPicker.setOnObjectPickedListener(this);
 
-        trailers[0] = new Trailer();
+        trailers[0] = new Trailer(getContext(), mPicker);
         trailers[0].hide();
         trailers[0].setPosition(0, 0, 0);
         getCurrentScene().addChild(trailers[0]);
-        for (int i = 1; i < 2; i++) {
-            trailers[i] = new Trailer();
+        for (int i = 1; i < trailers.length; i++) {
+            trailers[i] = new Trailer(getContext(), mPicker);
             trailers[i].hide();
             trailers[i].setPosition(i * -16, 0, 0);
             trailers[0].addChild(trailers[i]);
         }
 
-        calcProjectionMatrix();
-        getCurrentCamera().setProjectionMatrix(new Matrix4(projectionMatrix));
+        mCamera.setProjectionMatrix(calcProjectionMatrix());
+        getCurrentScene().replaceAndSwitchCamera(getCurrentCamera(), mCamera);
     }
 
-    private void calcProjectionMatrix() {
+    private double[] calcProjectionMatrix() {
+        double[] projectionMatrix = new double[16];
+        double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
+
         double fx = cameraMatrixData[0][0];
         double fy = cameraMatrixData[1][1];
         double cx = cameraMatrixData[0][2];
@@ -111,55 +93,56 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
         projectionMatrix[13] = 0;
         projectionMatrix[14] = -2.0 * far * near / (far - near);
         projectionMatrix[15] = 0;
+
+        return projectionMatrix;
     }
 
-    private void clear() {
-        if(trailerNum > 0) {
-            for (int i = 0; i < trailerNum; i++) {
-                trailers[i].onPause();
-                trailers[i].hide();
-            }
-        }
-    }
+    public void onPosterChanged(MarkerGroup markerGroup) {
+        List<Integer> newPoster = markerGroup.getIDs();
+        List<Integer> expiredPoster = new ArrayList<>(curMarkerIDs);
+        expiredPoster.removeAll(newPoster);
+        newPoster.removeAll(curMarkerIDs);
+        Log.d("render", "new poster: " + newPoster.size() + "expired poster: " + expiredPoster.size());
 
-    public void onPosterChanged(Markers markers) {
-        clear();
+        for (int i = 0; i < trailers.length; i++) {
+            int trailerID = trailers[i].getID();
 
-        if(markers != null && markers.Num > 0) {
-            trailerNum = 0;
-            for (int i = 0; i < 2 && i < markers.Num; i++) {
-                int curID = markers.IDs[i];
-                switch(curID) {
-                    case 0:
-                    case 1:
-                        if(enableVideo)
-                            trailers[i].setTrailerContent(curID);
-                        trailers[i].show();
-                        trailerNum++;
-                        break;
-                    case 2:
-                    case 3:
-                    case 4:
-                    default:
-                        break;
+            if (trailerID == -1 && newPoster.size() > 0) {
+                int curID = newPoster.get(0);
+                trailers[i].setTrailerContent(curID);
+                trailers[i].show();
+                newPoster.remove(0);
+            } else if (expiredPoster.size() > 0) {
+                if (expiredPoster.contains(trailerID)) {
+                    trailers[i].onDisappear();
+                    expiredPoster.remove(expiredPoster.indexOf(trailerID));
                 }
             }
         }
+
+        curMarkerIDs = markerGroup.getIDs();
     }
 
     @Override
     public void onRender(final long elapsedTime, final double deltaTime) {
         super.onRender(elapsedTime, deltaTime);
-        Matrix4 glViewMatrix = new Matrix4(glViewMatrixData);
-        getCurrentCamera().setPosition(glViewMatrix.getTranslation().inverse());
-        trailers[0].setRotation(glViewMatrix.inverse());
-        for (int i = 0; i < trailerNum; i++)
+        for (int i = 0; i < trailers.length; i++)
             trailers[i].updateTexture();
+    }
+
+    public void setGlViewMatrix(double[] glViewMatrixData) {
+        mCamera.setViewMatrix(glViewMatrixData);
     }
 
     @Override
     public void onRenderSurfaceCreated(EGLConfig config, GL10 gl, int width, int height) {
         super.onRenderSurfaceCreated(config, gl, width, height);
+    }
+
+    public void onActivityPause() {
+        for (int i = 0; i < trailers.length; i++) {
+            trailers[i].onDisappear();
+        }
     }
 
     @Override
@@ -177,12 +160,12 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     public void onObjectPicked(Object3D object) {
         int pickedTrailer = -1;
 
-        for(int i = 0; i < trailerNum; i++) {
+        for(int i = 0; i < trailers.length; i++) {
             if(trailers[i].onTouch(object)) {
                 pickedTrailer = i;
             }
         }
-        for(int i = 0; i < trailerNum; i++) {
+        for(int i = 0; i < trailers.length; i++) {
             if(pickedTrailer == -1)
                 trailers[i].show();
             else if(pickedTrailer != i)
@@ -194,175 +177,4 @@ public class PosterRenderer extends Renderer implements OnObjectPickedListener {
     public void onNoObjectPicked() {
         RajLog.w("No object picked!");
     }
-
-    public void onActivityPause() {
-        clear();
-    }
-
-    public void setGlViewMatrix(double[] glViewMatrixData) {
-        this.glViewMatrixData = glViewMatrixData;
-    }
-
-    private class Trailer extends Plane {
-        private RectangularPrism mBoard;
-        private Plane mButton, mTrailer;
-        private Material baseMaterial, boardMaterial, trailerMaterial, buttonMaterial;
-        private MediaPlayer mMediaPlayer;
-        private StreamingTexture mVideoTexture;
-        private boolean videoOn = false;
-
-        public Trailer() {
-            super(1, 1, 1, 1);
-            baseMaterial = new Material();
-            baseMaterial.enableLighting(false);
-            baseMaterial.setColor(Color.TRANSPARENT);
-            baseMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
-            this.setMaterial(baseMaterial);
-
-            mBoard = new RectangularPrism((float)26.8, (float)15.6, (float)1);
-            mBoard.setPosition(0, 0, 0.5);
-            boardMaterial = new Material();
-            try {
-                boardMaterial.addTexture(new Texture("bluelight",
-                        R.drawable.lightblue));
-            } catch (ATexture.TextureException e) {
-                e.printStackTrace();
-            }
-            boardMaterial.setColorInfluence(0);
-            mBoard.setMaterial(boardMaterial);
-            mBoard.setVisible(false);
-            this.addChild(mBoard);
-
-            mTrailer = new Plane((float)26.4, (float)15.2, 1, 1, Vector3.Axis.Z);
-            mTrailer.setPosition(0, 0, 1.1);
-
-            mButton = new Plane(8, 8, 1, 1, Vector3.Axis.Z);
-            mButton.setPosition(0, 0, 0.2);
-            buttonMaterial = new Material();
-            try {
-                buttonMaterial.addTexture(new Texture("youtube_button",
-                        R.drawable.youtubebutton));
-            } catch (ATexture.TextureException e) {
-                e.printStackTrace();
-            }
-            buttonMaterial.setColorInfluence(0);
-            mButton.setMaterial(buttonMaterial);
-            this.addChild(mButton);
-
-            mPicker.registerObject(mTrailer);
-            mPicker.registerObject(mButton);
-        }
-
-        public void setTrailerContent(int movieID) {
-            if (onlineVideo) {
-                mMediaPlayer = new MediaPlayer();
-                mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                try {
-                    mMediaPlayer.setDataSource(url);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            } else {
-                switch(movieID) {
-                    case 0:
-                        mMediaPlayer = MediaPlayer.create(getContext(), R.raw.london);
-                        break;
-                    case 1:
-                        mMediaPlayer = MediaPlayer.create(getContext(), R.raw.batmanvsuperman);
-                        break;
-                    default:
-                        break;
-                }
-            }
-            mMediaPlayer.setLooping(false);
-            mVideoTexture = new StreamingTexture("trailer", mMediaPlayer);
-            trailerMaterial = new Material();
-            trailerMaterial.setColorInfluence(0);
-            trailerMaterial.enableLighting(false);
-            try {
-                trailerMaterial.addTexture(mVideoTexture);
-            } catch (ATexture.TextureException e) {
-                e.printStackTrace();
-            }
-            mTrailer.setMaterial(trailerMaterial);
-            mTrailer.setVisible(false);
-            this.addChild(mTrailer);
-        }
-
-        public void updateTexture() {
-            if(videoOn)
-                mVideoTexture.update();
-        }
-
-        boolean onTouch(Object3D object) {
-            if(!enableVideo)
-                return false;
-
-            if(object == mButton) {
-                mButton.setVisible(false);
-                mBoard.setVisible(true);
-                mTrailer.setVisible(true);
-                if(onlineVideo) {
-                    try {
-                        mMediaPlayer.prepare();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-                mMediaPlayer.start();
-                videoOn = true;
-            } else if(object == mTrailer){
-                mMediaPlayer.pause();
-                mBoard.setVisible(false);
-                mTrailer.setVisible(false);
-                mButton.setVisible(true);
-                videoOn = false;
-            }
-            return videoOn;
-        }
-
-        public void onPause() {
-            if(enableVideo && mMediaPlayer.isPlaying())
-                mMediaPlayer.stop();
-        }
-
-        public void hide() {
-            mBoard.setVisible(false);
-            mTrailer.setVisible(false);
-            mButton.setVisible(false);
-        }
-
-        public void show() {
-            mButton.setVisible(true);
-        }
-    }
 }
-
-
-/*
-textMaterial = new Material();
-        textMaterial.enableLighting(true);
-        textMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
-
-        mTextBitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888);
-        mTextCanvas = new Canvas(mTextBitmap);
-        mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        mTextPaint.setColor(Color.RED);
-        mTextPaint.setTextSize(20);
-        mTextCanvas.drawColor(0, PorterDuff.Mode.CLEAR);
-        mTextCanvas.drawText("hello world", 10, 20, mTextPaint);
-
-        mTextTexture = new AlphaMapTexture("textTexture", mTextBitmap);
-        try {
-        textMaterial.addTexture(mTextTexture);
-        } catch (ATexture.TextureException e) {
-        e.printStackTrace();
-        }
-        textMaterial.setColorInfluence(1);
-
-        mText = new Plane(8, 10, 1, 1, Vector3.Axis.Z);
-        mText.setColor(Color.RED);
-        mText.setPosition(0, 0, 0.1);
-        mText.setMaterial(textMaterial);
-        mText.setVisible(true);
-        this.addChild(mText);*/

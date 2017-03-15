@@ -1,5 +1,6 @@
 package symlab.core;
 
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
@@ -12,8 +13,7 @@ import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 import java.util.ArrayList;
 
-import symlab.cloudridar.Markers;
-import symlab.core.adapter.MarkerCallback;
+import symlab.core.impl.MarkerGroup;
 import symlab.core.adapter.RenderAdapter;
 import symlab.core.impl.MarkerImpl;
 import symlab.core.task.TrackingTask;
@@ -110,20 +110,20 @@ public class ArManager {
 
         taskReceiving.setCallback(new ReceivingTask.Callback() {
             @Override
-            public void onReceive(int resultID, Markers markers) {
+            public void onReceive(int resultID, MarkerGroup markerGroup) {
                 /**
                  * TODO further modify to support that origin size returned by server.
                  *
                  * now we are simply input the origin size by constants, in the future, these data should
-                 * be returned by server. Whatever how the {@link Markers} (marker group) would changed,
+                 * be returned by server. Whatever how the {@link MarkerGroup}  would changed,
                  * the input structure {@link symlab.core.impl.MarkerImpl.Marker} remains the same.
                  * All we need to do is transforming the size here.
                  */
                 ArrayList<MarkerImpl.Marker> arrayList = new ArrayList<MarkerImpl.Marker>();
-                for (int i=0; i<markers.Num; i++){
+                for (int i=0; i<markerGroup.size(); i++){
                     MatOfPoint3f origin = new MatOfPoint3f();
-                    origin.fromArray(Constants.posterPointsData[markers.IDs[0]]);
-                    arrayList.add(new MarkerImpl.Marker(markers.IDs[i], origin,  markers.Recs[i]));
+                    origin.fromArray(Constants.posterPointsData[markerGroup.getID(0)]);
+                    arrayList.add(new MarkerImpl.Marker(markerGroup.getID(i), origin,  markerGroup.getRec(i)));
                 }
                 markerManager.updateMarkers(arrayList, resultID);
             }
@@ -151,11 +151,12 @@ public class ArManager {
                 }
             }
         });
-
-        for(int i = 0; i < FRAME_THREAD_SIZE; i++)
-            handlerFrame[i].getLooper().quitSafely();
-        handlerNetwork.getLooper().quitSafely();
-        handlerUtil.getLooper().quitSafely();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+            for(int i = 0; i < FRAME_THREAD_SIZE; i++)
+                    handlerFrame[i].getLooper().quitSafely();
+            handlerNetwork.getLooper().quitSafely();
+            handlerUtil.getLooper().quitSafely();
+        }
     }
 
     public void driveFrame(byte[] frameData){
