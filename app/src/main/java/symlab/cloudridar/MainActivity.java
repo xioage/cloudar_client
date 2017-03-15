@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import symlab.core.ArManager;
 import symlab.core.Constants;
 import symlab.core.adapter.RenderAdapter;
-import symlab.core.impl.MarkerImpl;
+import symlab.core.track.MarkerImpl;
 
 
 public class MainActivity extends Activity {

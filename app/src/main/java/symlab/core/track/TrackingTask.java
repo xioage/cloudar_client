@@ -1,6 +1,5 @@
-package symlab.core.task;
+package symlab.core.track;
 
-import android.util.Log;
 import android.util.Pair;
 
 import org.opencv.core.CvType;
@@ -13,7 +12,7 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.video.Video;
 
 import symlab.core.Constants;
-import symlab.core.model.SerialModel;
+import symlab.core.track.SerialModel;
 
 /**
  * Created by st0rm23 on 2017/2/20.

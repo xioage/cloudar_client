@@ -17,7 +17,7 @@ import java.util.List;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-import symlab.core.impl.MarkerGroup;
+import symlab.core.model.MarkerGroup;
 import symlab.core.renderer.MyCamera;
 
 /**

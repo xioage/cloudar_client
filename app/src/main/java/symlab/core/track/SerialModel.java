@@ -1,4 +1,4 @@
-package symlab.core.model;
+package symlab.core.track;
 
 import android.util.Log;
 

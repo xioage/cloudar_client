@@ -13,12 +13,12 @@ import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 import java.util.ArrayList;
 
-import symlab.core.impl.MarkerGroup;
+import symlab.core.model.MarkerGroup;
 import symlab.core.adapter.RenderAdapter;
-import symlab.core.impl.MarkerImpl;
-import symlab.core.task.TrackingTask;
-import symlab.core.task.ReceivingTask;
-import symlab.core.task.TransmissionTask;
+import symlab.core.track.MarkerImpl;
+import symlab.core.track.TrackingTask;
+import symlab.core.network.ReceivingTask;
+import symlab.core.network.TransmissionTask;
 
 /**
  * Created by st0rm23 on 2017/2/18.
@@ -116,7 +116,7 @@ public class ArManager {
                  *
                  * now we are simply input the origin size by constants, in the future, these data should
                  * be returned by server. Whatever how the {@link MarkerGroup}  would changed,
-                 * the input structure {@link symlab.core.impl.MarkerImpl.Marker} remains the same.
+                 * the input structure {@link symlab.core.track.MarkerImpl.Marker} remains the same.
                  * All we need to do is transforming the size here.
                  */
                 ArrayList<MarkerImpl.Marker> arrayList = new ArrayList<MarkerImpl.Marker>();

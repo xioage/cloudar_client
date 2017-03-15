@@ -2,8 +2,7 @@ package symlab.core.adapter;
 
 import java.util.ArrayList;
 
-import symlab.core.impl.MarkerGroup;
-import symlab.core.impl.MarkerImpl;
+import symlab.core.track.MarkerImpl;
 
 /**
  * Created by st0rm23 on 2017/2/20.

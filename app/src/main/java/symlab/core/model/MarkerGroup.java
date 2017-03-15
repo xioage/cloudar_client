@@ -1,4 +1,4 @@
-package symlab.core.impl;
+package symlab.core.model;
 
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint2f;

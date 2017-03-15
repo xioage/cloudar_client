@@ -1,15 +1,11 @@
-package symlab.core.impl;
+package symlab.core.track;
 
 import android.util.Pair;
 
 import org.opencv.core.MatOfPoint2f;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Hashtable;
-import java.util.Map;
-
-import symlab.core.impl.MarkerImpl;
 
 /**
  * Created by st0rm23 on 2017/3/14.

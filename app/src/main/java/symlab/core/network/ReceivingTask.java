@@ -1,4 +1,4 @@
-package symlab.core.task;
+package symlab.core.network;
 
 import android.util.Log;
 
@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
 
-import symlab.core.impl.MarkerGroup;
+import symlab.core.model.MarkerGroup;
 import symlab.core.Constants;
 
 /**

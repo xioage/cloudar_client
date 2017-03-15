@@ -1,13 +1,10 @@
-package symlab.core.task;
+package symlab.core.network;
 
-import android.os.Handler;
 import android.util.Log;
 
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
-import org.opencv.core.MatOfInt;
-import org.opencv.core.Point;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 

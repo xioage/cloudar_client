@@ -2,9 +2,6 @@ package symlab.cloudridar;
 
 import android.content.Context;
 import android.graphics.Color;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.util.Log;
 import android.util.Pair;
 import android.view.MotionEvent;
 
@@ -14,27 +11,14 @@ import org.rajawali3d.lights.PointLight;
 import org.rajawali3d.materials.Material;
 import org.rajawali3d.materials.methods.DiffuseMethod;
 import org.rajawali3d.materials.methods.SpecularMethod;
-import org.rajawali3d.materials.textures.ATexture;
-import org.rajawali3d.materials.textures.StreamingTexture;
-import org.rajawali3d.materials.textures.Texture;
 import org.rajawali3d.math.Matrix;
 import org.rajawali3d.math.Matrix4;
-import org.rajawali3d.math.vector.Vector3;
 import org.rajawali3d.primitives.Cube;
-import org.rajawali3d.primitives.Plane;
-import org.rajawali3d.primitives.RectangularPrism;
 import org.rajawali3d.renderer.Renderer;
-import org.rajawali3d.util.ObjectColorPicker;
-import org.rajawali3d.util.OnObjectPickedListener;
-import org.rajawali3d.util.RajLog;
 
-import java.io.IOException;
 import java.util.ArrayList;
 
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
-
-import symlab.core.impl.MarkerImpl;
+import symlab.core.track.MarkerImpl;
 
 /**
  * Created by wzhangal on 7/27/2016.

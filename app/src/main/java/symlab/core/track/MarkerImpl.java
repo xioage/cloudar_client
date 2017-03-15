@@ -1,4 +1,4 @@
-package symlab.core.impl;
+package symlab.core.track;
 
 import android.os.Handler;
 
@@ -16,11 +16,10 @@ import java.util.Queue;
 
 import symlab.cloudridar.HistoryTrackingPoints;
 import symlab.core.Constants;
-import symlab.core.task.TrackingTask;
 
 /**
  * Created by st0rm23 on 2017/2/20.
- * MarkerImpl is a implementation of {@link symlab.core.task.TrackingTask.Callback},
+ * MarkerImpl is a implementation of {@link TrackingTask.Callback},
  * MarkerImpl is used for calculating the markers position and rotation.
  *
  * User interact with this class via 3 main method, like following:
