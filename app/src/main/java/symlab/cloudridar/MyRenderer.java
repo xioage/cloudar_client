@@ -13,6 +13,7 @@ import org.rajawali3d.cameras.Camera;
 import org.rajawali3d.lights.PointLight;
 import org.rajawali3d.materials.Material;
 import org.rajawali3d.materials.methods.DiffuseMethod;
+import org.rajawali3d.materials.methods.SpecularMethod;
 import org.rajawali3d.materials.textures.ATexture;
 import org.rajawali3d.materials.textures.StreamingTexture;
 import org.rajawali3d.materials.textures.Texture;
@@ -52,9 +53,8 @@ public class MyRenderer extends Renderer {
     @Override
     protected void initScene() {
         PointLight light = new PointLight();
-        light.setPosition(10, 0, 3);
-        light.setLookAt(0, 0, -1);
-        light.setPower(1f);
+        light.setY(2f);
+        light.setPower(20f);
         getCurrentScene().addLight(light);
 
         myCamera = new MyCamera();
@@ -83,9 +83,9 @@ public class MyRenderer extends Renderer {
                 Object3D cube = data.get(i).second;
 
 
-                Pair<double[], double[]> orientation = markers.get(i).getOrientation();
-                cube.setPosition(new Vector3(orientation.first));
-                cube.setRotation(new Vector3(orientation.second));
+                Matrix4 matrix = new Matrix4(markers.get(i).getOrientation());
+                cube.setPosition(matrix.getTranslation());
+                cube.setRotation(matrix.inverse());
             }
         }
         if (hasChanged){
@@ -96,13 +96,18 @@ public class MyRenderer extends Renderer {
             for (MarkerImpl.Marker marker : markers){
                 Cube cube = new Cube(5);
                 Material baseMaterial = new Material();
-                baseMaterial.enableLighting(false);
-                baseMaterial.setColor(Color.RED);
                 baseMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
+                SpecularMethod.Phong phongMethod = new SpecularMethod.Phong();
+                phongMethod.setShininess(180);
+                baseMaterial.setSpecularMethod(phongMethod);
+                baseMaterial.setAmbientIntensity(0, 0, 0);
+                baseMaterial.enableLighting(true);
+                baseMaterial.setColor(Color.RED);
                 cube.setMaterial(baseMaterial);
-                Pair<double[], double[]> orientation = marker.getOrientation();
-                cube.setPosition(new Vector3(orientation.first));
-                cube.setRotation(new Vector3(orientation.second));
+                Matrix4 matrix = new Matrix4(marker.getOrientation());
+                cube.setPosition(matrix.getTranslation());
+                cube.setRotation(matrix.inverse());
+
                 data.add(new Pair<MarkerImpl.Marker, Object3D>(marker, cube));
                 getCurrentScene().addChild(cube);
             }

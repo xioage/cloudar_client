@@ -4,7 +4,6 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
 
-import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint3f;
 
 import java.io.IOException;
@@ -61,7 +60,6 @@ public class ArManager {
 
     public void init(RenderAdapter renderAdapter){
         System.loadLibrary("opencv_java");
-
         try {
             serverAddr = new InetSocketAddress(Constants.ip, Constants.portNum);
             dataChannel = DatagramChannel.open();
