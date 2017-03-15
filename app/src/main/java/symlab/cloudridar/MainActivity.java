@@ -180,18 +180,6 @@ public class MainActivity extends Activity {
             if (count % 30 == 1) {
                 mDraw.updateData(ArManager.getInstance().frameSnapshot());
             }
-            ArManager.getInstance().getMarkers(new MarkerCallback() {
-                @Override
-                public void onResult(final Markers markers) {
-                    mDraw.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            MainActivity.this.markers = markers;
-                            mDraw.invalidate();
-                        }
-                    });
-                }
-            });
         }
     };
 

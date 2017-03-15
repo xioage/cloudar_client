@@ -58,7 +58,7 @@ public class ArManager {
         return new Handler(handlerThread.getLooper());
     }
 
-    public void init(RenderAdapter renderAdapter){
+    public void init(final RenderAdapter renderAdapter){
         System.loadLibrary("opencv_java");
         try {
             serverAddr = new InetSocketAddress(Constants.ip, Constants.portNum);
@@ -84,7 +84,6 @@ public class ArManager {
             taskFrame[i].setCallback(markerManager);
         }
 
-        markerManager.setRenderAdapter(renderAdapter);
         markerManager.setCallback(new MarkerImpl.Callback() {
             @Override
             public void onSample(int frameId, byte[] frameData) {
@@ -92,11 +91,34 @@ public class ArManager {
                 handlerNetwork.post(taskTransmission);
                 taskReceiving.updateLatestSentID(frameId);
             }
+
+            @Override
+            public void onMarkersChanged(ArrayList<MarkerImpl.Marker> markers) {
+                /**
+                 * TODO further modify the adding render information
+                 *
+                 * marker is only provide the basic model matrix information here.
+                 *
+                 * Now we just directly send the marker information to renderAdapter, and what to render
+                 * according to these marker is fixed in {@link symlab.cloudridar.MyRenderer}
+                 * However, in the future, the render content should be added here to build a concrete
+                 * data structure, for example RenderObjects. then send out by renderAdapter.
+                 */
+                renderAdapter.onRender(markers);
+            }
         });
 
         taskReceiving.setCallback(new ReceivingTask.Callback() {
             @Override
             public void onReceive(int resultID, Markers markers) {
+                /**
+                 * TODO further modify to support that origin size returned by server.
+                 *
+                 * now we are simply input the origin size by constants, in the future, these data should
+                 * be returned by server. Whatever how the {@link Markers} (marker group) would changed,
+                 * the input structure {@link symlab.core.impl.MarkerImpl.Marker} remains the same.
+                 * All we need to do is transforming the size here.
+                 */
                 ArrayList<MarkerImpl.Marker> arrayList = new ArrayList<MarkerImpl.Marker>();
                 for (int i=0; i<markers.Num; i++){
                     MatOfPoint3f origin = new MatOfPoint3f();
@@ -144,11 +166,6 @@ public class ArManager {
         handlerFrame[taskId].post(task);
 
         handlerNetwork.post(taskReceiving);
-    }
-
-    public void getMarkers(MarkerCallback callback){
-        if (markerManager == null) return ;
-        markerManager.getMarkers(callback);
     }
 
     public int frameSnapshot(){

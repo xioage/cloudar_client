@@ -23,8 +23,22 @@ import symlab.core.task.TrackingTask;
 
 /**
  * Created by st0rm23 on 2017/2/20.
+ * MarkerImpl is a implementation of {@link symlab.core.task.TrackingTask.Callback},
+ * MarkerImpl is used for calculating the markers position and rotation.
+ *
+ * User interact with this class via 3 main method, like following:
+ * 1 {@link #updateMarkers(ArrayList, int)}: this is the positive way to input the initial marker information
+ * 2 {@link Callback#onMarkersChanged(ArrayList)}: this is the passive way to receive result marker with calculated modelMatrix
+ * 3 {@link Callback#onSample(int, byte[])}: this must be implemented to send frame data to server for recognizing
+ *
+ * To use this class, firstly implement the callback,
+ * then use {@link #updateMarkers(ArrayList, int)} to input the markers you want to track
+ *
+ *  all the work in MarkerImpl is done within a single thread.
+ *
+ * @author Lin Binghui
+ * @version 1.0
  */
-
 public class MarkerImpl implements TrackingTask.Callback{
 
     private ArrayList<Marker> markers;
@@ -43,6 +57,12 @@ public class MarkerImpl implements TrackingTask.Callback{
         historyQueue = new LinkedList<HistoryTrackingPoints>();
     }
 
+    /**
+     * input the markers for further tracking
+     *
+     * @param markers marker information for tracking
+     * @param markerFrameId frame id when marker represented for.
+     */
     public void updateMarkers(final ArrayList<Marker> markers, final int markerFrameId){
         if (markers == null || markers.size() == 0) return;
         handler.post(new Runnable() {
@@ -56,9 +76,6 @@ public class MarkerImpl implements TrackingTask.Callback{
                 MarkerImpl.this.markerFrameId = markerFrameId;
             }
         });
-    }
-
-    public void getMarkers(final MarkerCallback callback){
     }
 
     private boolean isInside(Point point, Mat rect) {
@@ -219,21 +236,15 @@ public class MarkerImpl implements TrackingTask.Callback{
                     findHomography(frameID, oldFeatures, features, markers);
                     transformBound(markers);
                     calcModelMatrix(markers);
-                    if (adapter != null) {
+                    if (callback != null) {
                         ArrayList arrayList = new ArrayList();
                         for (Marker marker : markers)
                             if (marker.isValid) arrayList.add(marker.clone());
-                        adapter.onRender(arrayList);
+                        callback.onMarkersChanged(arrayList);
                     }
                 }
             }
         });
-    }
-
-    private RenderAdapter adapter;
-
-    public void setRenderAdapter(RenderAdapter adapter){
-        this.adapter = adapter;
     }
 
     private Callback callback;
@@ -243,10 +254,32 @@ public class MarkerImpl implements TrackingTask.Callback{
     }
 
     public interface Callback {
+        /**
+         * this method will be invoked periodically to notify user sending frameData to server.
+         *
+         * @param frameId current frame id
+         * @param frameData current frame data
+         */
         void onSample(int frameId, byte[] frameData);
+
+        /**
+         * this method will be invoked each frame. And in each marker,
+         * the function {@link Marker#getOrientation()} is valid to output the correct marker model matrix
+         *
+         * @param markers current valid markers on the screen
+         */
+        void onMarkersChanged(ArrayList<Marker> markers);
     }
 
-
+    /**
+     * a marker for {@link MarkerImpl} to track.
+     * user input the basic information of marker including id, origin vertices, screen vertices.
+     * when finished calculating in {@link MarkerImpl.Callback#onMarkersChanged(ArrayList)}, user can
+     * get the correct model view matrix via {@link Marker#getOrientation()}
+     *
+     * @author Lin Binghui
+     * @version 1.0
+     */
     static public class Marker{
         private int id;
         private final MatOfPoint3f origin;
@@ -255,6 +288,13 @@ public class MarkerImpl implements TrackingTask.Callback{
         private double[] orientation;
         private boolean isValid;
 
+        /**
+         * create a marker for tracking position
+         *
+         * @param id id specified by user for distinguishing marker
+         * @param origin origin vertices of this marker in real word, whose unit is meter.
+         * @param vertices picture vertices of this marker on screen, whose unit is scaled pixel
+         */
         public Marker(int id, MatOfPoint3f origin, MatOfPoint2f vertices){
             this.id = id;
             this.origin = origin;
@@ -273,6 +313,11 @@ public class MarkerImpl implements TrackingTask.Callback{
             return marker;
         }
 
+        /**
+         * get the model matrix of model
+         *
+         * @return double[16] represent for 4x4 model view matrix
+         */
         public double[] getOrientation(){
             return orientation;
         }
