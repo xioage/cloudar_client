@@ -50,7 +50,6 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
 
         for (Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet()) {
             content.getValue().init(getContext(), mPicker);
-            content.getValue().hide();
             getCurrentScene().addChild(content.getValue().getObject());
         }
 
@@ -68,11 +67,11 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
             newIDs.removeAll(this.curMarkerIDs);
 
             for (Integer expiredID : expiredIDs) {
-                mScene.getContents().get(expiredID).hide();
+                mScene.getContents().get(expiredID).onTargetDisappear();
             }
 
             for (Integer newID : newIDs){
-                mScene.getContents().get(newID).show();
+                mScene.getContents().get(newID).onTargetRecognized();
             }
         }
 
@@ -101,7 +100,7 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
 
     public void onActivityPause() {
         for (Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet())
-            content.getValue().onDisappear();
+            content.getValue().onDestruction();
     }
 
     @Override
@@ -117,8 +116,13 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
     }
 
     public void onObjectPicked(Object3D object) {
+        boolean isPicked = false;
         for(Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet()) {
-            content.getValue().onTouch(object);
+            if(content.getValue().onTouch(object))
+                isPicked = true;
+        }
+        for(Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet()) {
+            content.getValue().onSceneContentPicked(isPicked);
         }
     }
 

@@ -36,6 +36,7 @@ public class VideoPlayer implements ARContent{
     private String url = "rtsp://";
     private int videoID;
 
+    private boolean Recognized = false;
     private boolean videoOn = false;
     private boolean onlineVideo = false;
 
@@ -55,7 +56,7 @@ public class VideoPlayer implements ARContent{
         baseMaterial.setColor(Color.TRANSPARENT);
         baseMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
         mBase.setMaterial(baseMaterial);
-        mBase.setVisible(true);
+        mBase.setVisible(false);
 
         mBoard = new RectangularPrism((float)26.8, (float)15.6, (float)1);
         mBoard.setPosition(0, 0, 0.5);
@@ -109,7 +110,7 @@ public class VideoPlayer implements ARContent{
         }
         buttonMaterial.setColorInfluence(0);
         mButton.setMaterial(buttonMaterial);
-        mButton.setVisible(false);
+        mButton.setVisible(true);
         mBase.addChild(mButton);
 
         mPicker.registerObject(mTrailer);
@@ -128,8 +129,26 @@ public class VideoPlayer implements ARContent{
     }
 
     @Override
+    public void onTargetRecognized() {
+        Recognized = true;
+        mBase.setVisible(true);
+    }
+
+    @Override
+    public void onTargetDisappear() {
+        Recognized = false;
+        mBase.setVisible(false);
+        mBoard.setVisible(false);
+        mTrailer.setVisible(false);
+        mButton.setVisible(true);
+        videoOn = false;
+    }
+
+    @Override
     public boolean onTouch(Object3D object) {
-        if(object == mButton) {
+        if(!Recognized) {
+            return false;
+        } else if(object == mButton) {
             mButton.setVisible(false);
             mBoard.setVisible(true);
             mTrailer.setVisible(true);
@@ -146,41 +165,32 @@ public class VideoPlayer implements ARContent{
             return true;
         } else if(object == mTrailer){
             mMediaPlayer.pause();
+            mBase.setVisible(false);
             mBoard.setVisible(false);
             mTrailer.setVisible(false);
             mButton.setVisible(true);
             videoOn = false;
 
-            return true;
+            return false;
         } else {
-            mBoard.setVisible(false);
-            mTrailer.setVisible(false);
-            mButton.setVisible(true);
-
             return false;
         }
     }
 
     @Override
-    public void onDisappear() {
-        hide();
+    public void onSceneContentPicked(boolean isPicked) {
+        if(!Recognized) {
+            return;
+        } else if(isPicked && !videoOn) {
+            mBase.setVisible(false);
+        } else {
+            mBase.setVisible(true);
+        }
+    }
 
+    @Override
+    public void onDestruction() {
         if(mMediaPlayer != null)
             mMediaPlayer.release();
-        mVideoTexture = null;
-        trailerMaterial = null;
-        mBase.removeChild(mTrailer);
-    }
-
-    @Override
-    public void hide() {
-        mBoard.setVisible(false);
-        mTrailer.setVisible(false);
-        mButton.setVisible(false);
-    }
-
-    @Override
-    public void show() {
-        mButton.setVisible(true);
     }
 }

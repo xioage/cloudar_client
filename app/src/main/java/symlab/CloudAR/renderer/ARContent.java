@@ -13,8 +13,9 @@ public interface ARContent {
     void init(Context context, ObjectColorPicker mPicker);
     Object3D getObject();
     void updateTexture();
+    void onTargetRecognized();
+    void onTargetDisappear();
     boolean onTouch(Object3D object);
-    void onDisappear();
-    void hide();
-    void show();
+    void onSceneContentPicked(boolean isPicked);
+    void onDestruction();
 }
