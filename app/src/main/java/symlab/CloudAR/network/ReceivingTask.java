@@ -27,7 +27,7 @@ public class ReceivingTask implements Runnable{
     private float[] floatres = new float[8];
     private Point[] pointArray = new Point[4];
     private byte[] tmp = new byte[4];
-    private byte[] name = new byte[64];
+    private byte[] name = new byte[56];
     private int newMarkerNum;
     private int lastSentID;
 
@@ -88,7 +88,8 @@ public class ReceivingTask implements Runnable{
 
                     System.arraycopy(res, 56 + i * 100, name, 0, 56);
                     String markerName = new String(name);
-                    String Name = markerName.substring(0, markerName.indexOf("."));
+                    String Name = markerName;
+                    //String Name = markerName.substring(0, markerName.indexOf("."));
 
                     markerGroup.addMarker(new Marker(ID, Name, new Size(width, height), Rec));
                 }

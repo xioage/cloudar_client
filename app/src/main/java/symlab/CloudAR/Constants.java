@@ -13,7 +13,7 @@ import org.opencv.highgui.Highgui;
 
 public class Constants {
 
-    static public final int FREQUENCY = 30;
+    static public final int FREQUENCY = 120;
     static public final int previewWidth = 1920;
     static public final int previewHeight = 1080;
     static public final int scale = 4;

@@ -31,16 +31,15 @@ public class ArManager {
 
     static private ArManager instance;
 
-    private final int FRAME_THREAD_SIZE = 2;
-
     private Handler handlerUtil;
     private Handler handlerNetwork;
-    private Handler[] handlerFrame;
+    private Handler handlerFrame;
 
-    private TrackingTask[] taskFrame;
-    private ReceivingTask taskReceiving;
-    private TransmissionTask taskTransmission;
     private MarkerImpl markerManager;
+    private TransmissionTask taskTransmission;
+    private ReceivingTask taskReceiving;
+    private TrackingTask taskFrame;
+
     private DatagramChannel dataChannel;
     private SocketAddress serverAddr;
 
@@ -90,19 +89,12 @@ public class ArManager {
 
         this.handlerUtil = createAndStartThread("util thread", Process.THREAD_PRIORITY_DEFAULT); //start util thread
         this.handlerNetwork = createAndStartThread("network thread", 1);
-        this.handlerFrame = new Handler[FRAME_THREAD_SIZE];
-        for (int i = 0; i< FRAME_THREAD_SIZE; i++){ //start frame processing thread
-            this.handlerFrame[i] = createAndStartThread(String.format("frame thread %d", i), -1);
-        }
+        this.handlerFrame = createAndStartThread("frame thread" , -1); //start frame processing thread
 
         markerManager = new MarkerImpl(handlerUtil);
         taskTransmission = new TransmissionTask(dataChannel, serverAddr);
         taskReceiving = new ReceivingTask(dataChannel);
-        taskFrame = new TrackingTask[FRAME_THREAD_SIZE];
-        for (int i = 0; i< FRAME_THREAD_SIZE; i++){
-            taskFrame[i] = new TrackingTask();
-            taskFrame[i].setCallback(markerManager);
-        }
+        taskFrame = new TrackingTask(markerManager);
 
         markerManager.setCallback(new MarkerImpl.Callback() {
             @Override
@@ -127,16 +119,9 @@ public class ArManager {
     }
 
     public void start() {
-        taskTransmission.setData(0, null);
-        for(int i = 0; i < 3; i++)
-            handlerNetwork.post(taskTransmission);
     }
 
     public void stop() {
-        taskTransmission.setData(-1, null);
-        for(int i = 0; i < 3; i++)
-            handlerNetwork.post(taskTransmission);
-
         handlerNetwork.post(new Runnable() {
             @Override
             public void run() {
@@ -148,19 +133,16 @@ public class ArManager {
             }
         });
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-            for(int i = 0; i < FRAME_THREAD_SIZE; i++)
-                    handlerFrame[i].getLooper().quitSafely();
+            handlerFrame.getLooper().quitSafely();
             handlerNetwork.getLooper().quitSafely();
             handlerUtil.getLooper().quitSafely();
         }
     }
 
     public void driveFrame(byte[] frameData){
-        int taskId = frameID % FRAME_THREAD_SIZE;
-        TrackingTask task = taskFrame[taskId];
-        if (task.isBusy()) return;
-        task.setFrameData(++frameID, frameData);
-        handlerFrame[taskId].post(task);
+        if (taskFrame.isBusy()) return;
+        taskFrame.setFrameData(++frameID, frameData);
+        handlerFrame.post(taskFrame);
 
         handlerNetwork.post(taskReceiving);
     }

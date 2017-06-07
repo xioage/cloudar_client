@@ -24,15 +24,15 @@ public class TrackingTask implements Runnable{
     private boolean busy;
 
     private Mat YUVMatTrack, YUVMatScaled;
+    private TrackModel preTrackModel;
 
-    private static SerialModel<TrackModel> serialTrackModel;
+    public TrackingTask(Callback callback){
+        this.callback = callback;
 
-    public TrackingTask(){
         frameID = 0;
         busy = false;
         YUVMatTrack = new Mat(Constants.previewHeight + Constants.previewHeight / 2, Constants.previewWidth, CvType.CV_8UC1);
         YUVMatScaled = new Mat((Constants.previewHeight + Constants.previewHeight / 2) / Constants.scale, Constants.previewWidth / Constants.scale, CvType.CV_8UC1);
-        serialTrackModel = new SerialModel<>(frameID, null);
     }
 
     public boolean isBusy(){
@@ -104,7 +104,6 @@ public class TrackingTask implements Runnable{
         Mat GRAYMat = procGrayImg(frameData);
 
         TrackModel newTrackModel = new TrackModel();
-        TrackModel preTrackModel = serialTrackModel.blockingGetValue(frameID-1);
         newTrackModel.GRAYMat = GRAYMat;
 
         Pair<Pair<MatOfPoint2f, MatOfPoint2f>, int[]> optFlow = null;
@@ -142,7 +141,7 @@ public class TrackingTask implements Runnable{
                 }
             }
         }
-        serialTrackModel.blockingUpdate(frameID, newTrackModel);
+        preTrackModel = newTrackModel;
         busy = false;
     }
 
@@ -158,10 +157,10 @@ public class TrackingTask implements Runnable{
         void onFinish(int frameID, MatOfPoint2f preFeature, MatOfPoint2f nowFeatures, int[] bitmap);
     }
 
-    private static class TrackModel{
-        protected Mat GRAYMat;
-        protected int[] bitmap;
-        protected MatOfPoint2f features;
+    private class TrackModel{
+        private Mat GRAYMat;
+        private int[] bitmap;
+        private MatOfPoint2f features;
     }
 
 }
