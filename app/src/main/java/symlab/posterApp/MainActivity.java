@@ -66,7 +66,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         mRenderSurface.setSurfaceRenderer(mRenderer);
         ((View) mRenderSurface).setOnTouchListener(this);
 
-        ArManager.getInstance().init(mRenderer);
+        ArManager.getInstance().init(this, mRenderer, false);
     }
 
     @Override
