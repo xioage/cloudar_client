@@ -20,22 +20,22 @@ public final class R {
         public static final int renderMode = 0x7f010009;
     }
     public static final class id {
-        public static final int RENDER_CONTINUOUS = 0x7f030002;
-        public static final int RENDER_WHEN_DIRTY = 0x7f030003;
-        public static final int coverage = 0x7f030000;
-        public static final int multisample = 0x7f030001;
+        public static final int RENDER_CONTINUOUS = 0x7f020000;
+        public static final int RENDER_WHEN_DIRTY = 0x7f020001;
+        public static final int coverage = 0x7f020002;
+        public static final int multisample = 0x7f020003;
     }
     public static final class raw {
-        public static final int blend_add_fragment_shader = 0x7f020000;
-        public static final int blend_screen_fragment_shader = 0x7f020001;
-        public static final int blur_fragment_shader = 0x7f020002;
-        public static final int color_threshold_shader = 0x7f020003;
-        public static final int copy_fragment_shader = 0x7f020004;
-        public static final int fog_fragment_shader = 0x7f020005;
-        public static final int grey_scale_fragment_shader = 0x7f020006;
-        public static final int minimal_vertex_shader = 0x7f020007;
-        public static final int sepia_fragment_shader = 0x7f020008;
-        public static final int vignette_fragment_shader = 0x7f020009;
+        public static final int blend_add_fragment_shader = 0x7f030000;
+        public static final int blend_screen_fragment_shader = 0x7f030001;
+        public static final int blur_fragment_shader = 0x7f030002;
+        public static final int color_threshold_shader = 0x7f030003;
+        public static final int copy_fragment_shader = 0x7f030004;
+        public static final int fog_fragment_shader = 0x7f030005;
+        public static final int grey_scale_fragment_shader = 0x7f030006;
+        public static final int minimal_vertex_shader = 0x7f030007;
+        public static final int sepia_fragment_shader = 0x7f030008;
+        public static final int vignette_fragment_shader = 0x7f030009;
     }
     public static final class styleable {
         public static final int[] SurfaceView = { 0x7f010000, 0x7f010001, 0x7f010002, 0x7f010003, 0x7f010004, 0x7f010005, 0x7f010006, 0x7f010007, 0x7f010008, 0x7f010009 };

@@ -125,7 +125,7 @@ public class MatchingTask implements Runnable{
             LinkedList<DMatch> good_matches = new LinkedList<>();
 
             for (int i = 0; i < descriptors.rows(); i++) {
-                if (matchesList.get(i).distance < 40) {
+                if (matchesList.get(i).distance < 60) {
                     good_matches.addLast(matchesList.get(i));
                 }
             }

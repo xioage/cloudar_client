@@ -13,7 +13,7 @@
         android:label="Tests for org.rajawali3d.test"
         android:targetPackage="org.rajawali3d.test" />
 
-    <application>
+    <application android:debuggable="true" >
         <uses-library android:name="android.test.runner" />
     </application>
 
