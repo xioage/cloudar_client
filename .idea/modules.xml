@@ -6,6 +6,8 @@
       <module fileurl="file://$PROJECT_DIR$/cloudridar_movieapp_client.git.iml" filepath="$PROJECT_DIR$/cloudridar_movieapp_client.git.iml" />
       <module fileurl="file://$PROJECT_DIR$/libraries/libraries.iml" filepath="$PROJECT_DIR$/libraries/libraries.iml" />
       <module fileurl="file://$PROJECT_DIR$/libraries/opencv/opencv.iml" filepath="$PROJECT_DIR$/libraries/opencv/opencv.iml" />
+      <module fileurl="file://$PROJECT_DIR$/libraries/opencv/opencv.iml" filepath="$PROJECT_DIR$/libraries/opencv/opencv.iml" />
+      <module fileurl="file://$PROJECT_DIR$/libraries/rajawali/rajawali.iml" filepath="$PROJECT_DIR$/libraries/rajawali/rajawali.iml" />
       <module fileurl="file://$PROJECT_DIR$/libraries/rajawali/rajawali.iml" filepath="$PROJECT_DIR$/libraries/rajawali/rajawali.iml" />
     </modules>
   </component>
