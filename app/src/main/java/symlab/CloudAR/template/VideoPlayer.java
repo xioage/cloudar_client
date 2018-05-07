@@ -45,7 +45,7 @@ public class VideoPlayer implements ARContent{
     }
 
     @Override
-    public void init(Context context, ObjectColorPicker mPicker) {
+    public void init(Context context, ObjectColorPicker mPicker, float width, float height) {
         this.context = context;
         this.mPicker = mPicker;
 
@@ -56,7 +56,7 @@ public class VideoPlayer implements ARContent{
         baseMaterial.setColor(Color.TRANSPARENT);
         baseMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
         mBase.setMaterial(baseMaterial);
-        mBase.setVisible(false);
+        mBase.setVisible(true);
 
         mBoard = new RectangularPrism((float)26.8, (float)15.6, (float)1);
         mBoard.setPosition(0, 0, 0.5);
@@ -129,22 +129,6 @@ public class VideoPlayer implements ARContent{
     }
 
     @Override
-    public void onTargetRecognized() {
-        Recognized = true;
-        mBase.setVisible(true);
-    }
-
-    @Override
-    public void onTargetDisappear() {
-        Recognized = false;
-        mBase.setVisible(false);
-        mBoard.setVisible(false);
-        mTrailer.setVisible(false);
-        mButton.setVisible(true);
-        videoOn = false;
-    }
-
-    @Override
     public boolean onTouch(Object3D object) {
         if(!Recognized) {
             return false;
@@ -178,18 +162,11 @@ public class VideoPlayer implements ARContent{
     }
 
     @Override
-    public void onSceneContentPicked(boolean isPicked) {
-        if(!Recognized) {
-            return;
-        } else if(isPicked && !videoOn) {
-            mBase.setVisible(false);
-        } else {
-            mBase.setVisible(true);
-        }
+    public void onAnnotationReceived(String annotationFile) {
     }
 
     @Override
-    public void onDestruction() {
+    public void destroy() {
         if(mMediaPlayer != null)
             mMediaPlayer.release();
     }

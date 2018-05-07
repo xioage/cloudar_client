@@ -22,10 +22,19 @@ public class MarkerGroup {
 
     public void addMarker(Marker marker) {
         this.markers.add(marker);
-        this.IDs.add(marker.getId());
+        this.IDs.add(marker.ID);
     }
 
-    public Marker getMarker(int index) {
+    public Marker getMarkerByIndex(int index) {
+        return markers.get(index);
+    }
+
+    public Marker getMarkerByID(int markerID) {
+        int index = 0;
+        for(Integer ID: IDs) {
+            if(ID == markerID) break;
+            index++;
+        }
         return markers.get(index);
     }
 

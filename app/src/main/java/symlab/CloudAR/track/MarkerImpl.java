@@ -25,7 +25,6 @@ import symlab.CloudAR.marker.MarkerGroup;
  * User interact with this class via 3 main method, like following:
  * 1 {@link #updateMarkers(MarkerGroup, int)}: this is the positive way to input the initial marker information
  * 2 {@link Callback#onMarkersChanged(MarkerGroup)}: this is the passive way to receive result marker with calculated modelMatrix
- * 3 {@link Callback#onSample(int, byte[])}: this must be implemented to send frame data to server for recognizing
  *
  * To use this class, firstly implement the callback,
  * then use {@link #updateMarkers(MarkerGroup, int)} to input the markers you want to track
@@ -97,8 +96,8 @@ public class MarkerImpl implements TrackingTask.Callback{
 
         int iterator = 0, refinedCount = 0;
         for (int i=0; i<Constants.MAX_POINTS; i++){
-            if (oldBitmap[i] != 0){ //旧的还有效
-                if (standardBitmap[i] != 0){ //现在还有效
+            if (oldBitmap[i] != 0){
+                if (standardBitmap[i] != 0){
                     refinedFeature.put(refinedCount, 0, oldFeaturePoint.get(iterator, 0));
                     refinedCount++;
                 }
@@ -122,10 +121,10 @@ public class MarkerImpl implements TrackingTask.Callback{
         if (!Constants.EnableMultipleTracking) {
             Mat homography = Calib3d.findHomography(oldFeatures, nowFeatures, Calib3d.RANSAC, 2);
             for (int i = 0; i < markerGroup.size(); i++)
-                markerGroup.getMarker(i).setHomography(homography);
+                markerGroup.getMarkerByIndex(i).setHomography(homography);
         } else {
             for (int i = 0; i < markerGroup.size(); i++) {
-                Marker marker = markerGroup.getMarker(i);
+                Marker marker = markerGroup.getMarkerByIndex(i);
 
                 if (!marker.isValid()) continue;
                 int n = oldFeatures.rows();
@@ -152,7 +151,7 @@ public class MarkerImpl implements TrackingTask.Callback{
 
     private void transformBound(){
         for (int i = 0; i < markerGroup.size(); i++){
-            Marker marker = markerGroup.getMarker(i);
+            Marker marker = markerGroup.getMarkerByIndex(i);
 
             if(marker.isValid()) {
                 MatOfPoint2f newRecs = new MatOfPoint2f();
@@ -166,7 +165,7 @@ public class MarkerImpl implements TrackingTask.Callback{
 
     private void calcModelMatrix(){
         for (int i = 0; i < markerGroup.size(); i++){
-            Marker marker = markerGroup.getMarker(i);
+            Marker marker = markerGroup.getMarkerByIndex(i);
 
             if (marker.getOrigin() == null || !marker.isValid()) continue;
             Mat rvec = new Mat();
@@ -186,10 +185,10 @@ public class MarkerImpl implements TrackingTask.Callback{
             viewMatrix.put(3, 3, 1.0);
             Core.gemm(Constants.cvToGl, viewMatrix, 1, new Mat(), 0, viewMatrix, 0);
 
-            double[] modelMatrix = new double[16];
+            float[] modelMatrix = new float[16];
             for (int col = 0; col < 4; col++)
                 for (int row = 0; row < 4; row++)
-                    modelMatrix[col * 4 + row] = viewMatrix.get(row, col)[0];
+                    modelMatrix[col * 4 + row] = (float)viewMatrix.get(row, col)[0];
 
             marker.setOrientation(modelMatrix);
         }
@@ -197,15 +196,6 @@ public class MarkerImpl implements TrackingTask.Callback{
 
     @Override
     public boolean onStart(final int frameID, final byte[] frameData) {
-        if (frameID % Constants.FREQUENCY == 10){
-            handler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (callback != null) callback.onSample(frameID, frameData);
-                }
-            });
-            return true;
-        }
         return false;
     }
 
@@ -228,16 +218,19 @@ public class MarkerImpl implements TrackingTask.Callback{
             @Override
             public void run() {
                 MatOfPoint2f oldFeatures = newMarkerFlag ? getHistoryFeatures(markerFrameId, trackingID, bitmap, features.rows()) : preFeature;
-                newMarkerFlag = false;
 
                 if (oldFeatures != null && markerGroup != null) {
                     findHomography(frameID, oldFeatures, features);
                     transformBound();
                     calcModelMatrix();
                     if (callback != null) {
-                        callback.onMarkersChanged(markerGroup);
+                        if(newMarkerFlag)
+                            callback.onMarkersRecognized(markerGroup);
+                        else
+                            callback.onMarkersChanged(markerGroup);
                     }
                 }
+                newMarkerFlag = false;
             }
         });
     }
@@ -249,13 +242,7 @@ public class MarkerImpl implements TrackingTask.Callback{
     }
 
     public interface Callback {
-        /**
-         * this method will be invoked periodically to notify user sending frameData to server.
-         *
-         * @param frameId current frame id
-         * @param frameData current frame data
-         */
-        void onSample(int frameId, byte[] frameData);
+        void onMarkersRecognized(MarkerGroup markerGroup);
 
         /**
          * this method will be invoked each frame. And in each marker,

@@ -19,14 +19,14 @@ import org.opencv.core.Size;
  */
 
 public class Marker {
-    private int ID;
-    private String name;
-    private Size size;
+    public int ID;
+    public String name;
+    public Size size;
     private MatOfPoint2f vertices;
     private MatOfPoint3f origin;
     private Mat homography;
     private int trackingPointsNum;
-    private double[] orientation;
+    private float[] orientation;
     private boolean isValid;
 
     public Marker(int ID, String name, Size size, MatOfPoint2f vertices) {
@@ -36,15 +36,11 @@ public class Marker {
         this.vertices = vertices;
 
         this.origin = new MatOfPoint3f();
-        double w = size.width / 25;
-        double h = size.height / 25;
+        double w = size.width / 2.0;
+        double h = size.height / 2.0;
         this.origin.fromArray(new Point3(-w, h, 0), new Point3(w, h, 0), new Point3(w, -h, 0), new Point3(-w, -h, 0));
 
         this.isValid = true;
-    }
-
-    public int getId(){
-        return this.ID;
     }
 
     public boolean isValid(){
@@ -64,7 +60,7 @@ public class Marker {
      *
      * @return double[16] represent for 4x4 model view matrix
      */
-    public double[] getOrientation(){
+    public float[] getOrientation(){
         return this.orientation;
     }
 
@@ -80,7 +76,7 @@ public class Marker {
         this.homography = homography;
     }
 
-    public void setOrientation(double[] orientation) {
+    public void setOrientation(float[] orientation) {
         this.orientation = orientation;
     }
 

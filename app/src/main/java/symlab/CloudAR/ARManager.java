@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
 import android.util.Log;
+import android.util.SparseArray;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -16,22 +17,20 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 import symlab.CloudAR.marker.MarkerGroup;
-import symlab.CloudAR.renderer.ARRenderer;
+import symlab.CloudAR.network.AnnotationTask;
 import symlab.CloudAR.track.MarkerImpl;
 import symlab.CloudAR.track.MatchingTask;
 import symlab.CloudAR.track.TrackingTask;
 import symlab.CloudAR.network.ReceivingTask;
 import symlab.CloudAR.network.TransmissionTask;
 
-import static symlab.CloudAR.Constants.TAG;
-
 /**
  * Created by st0rm23 on 2017/2/18.
  */
 
-public class ArManager {
+public class ARManager {
 
-    static private ArManager instance;
+    static private ARManager instance;
 
     private Handler handlerUtil;
     private Handler handlerFrame;
@@ -42,21 +41,25 @@ public class ArManager {
     private TransmissionTask taskTransmission;
     private ReceivingTask taskReceiving;
     private MatchingTask taskMatching;
+    private AnnotationTask taskAnnotation;
 
     private DatagramChannel dataChannel;
     private SocketAddress serverAddr;
+    private String ip;
+    private int port;
 
-    private Context context;
-    private ARRenderer mRenderer;
     private static boolean isCloudBased;
+    private boolean isAnnotationReceived = true;
 
     private int frameID = 0;
+    private MarkerGroup markers;
+    private SparseArray<String> annotations;
 
-    private ArManager(){ super(); }
+    private ARManager(){ super(); }
 
-    static public ArManager getInstance() {
-        synchronized (ArManager.class){
-            if (instance == null) instance = new ArManager();
+    static public ARManager getInstance() {
+        synchronized (ARManager.class){
+            if (instance == null) instance = new ARManager();
         }
         return instance;
     }
@@ -69,26 +72,24 @@ public class ArManager {
 
     private void initConnection() {
         File sdcard = Environment.getExternalStorageDirectory();
-        File file = new File(sdcard,"cloudConfig.txt");
+        File file = new File(sdcard,"CloudAR/cloudConfig.txt");
         try {
             BufferedReader br = new BufferedReader(new FileReader(file));
 
-            String ip = br.readLine();
-            int portNum = Integer.parseInt(br.readLine());
+            ip = br.readLine();
+            port = Integer.parseInt(br.readLine());
             br.close();
 
-            serverAddr = new InetSocketAddress(ip, portNum);
+            serverAddr = new InetSocketAddress(ip, port);
             dataChannel = DatagramChannel.open();
             dataChannel.configureBlocking(false);
             dataChannel.socket().connect(serverAddr);
         } catch (IOException e) {
-            Log.d(TAG, "config file error");
+            Log.d(Constants.TAG, "config file error");
         } catch (Exception e) {}
     }
 
-    public void init(Context context, final ARRenderer mRenderer, boolean isCloudBased){
-        this.context = context;
-        this.mRenderer = mRenderer;
+    public void init(Context context, boolean isCloudBased){
         this.isCloudBased = isCloudBased;
 
         System.loadLibrary("opencv_java");
@@ -99,41 +100,29 @@ public class ArManager {
         this.handlerNetwork = createAndStartThread("network thread", 1);
 
         markerManager = new MarkerImpl(handlerUtil);
-        taskFrame = new TrackingTask(markerManager);
+        taskFrame = new TrackingTask();
+        taskFrame.setCallback(markerManager);
         if(isCloudBased) {
             taskTransmission = new TransmissionTask(dataChannel, serverAddr);
             taskReceiving = new ReceivingTask(dataChannel);
-        } else {
-            taskMatching = new MatchingTask(context);
-        }
-
-        markerManager.setCallback(new MarkerImpl.Callback() {
-            @Override
-            public void onSample(int frameId, byte[] frameData) {
-                if(ArManager.isCloudBased) {
-                    taskTransmission.setData(frameId, frameData);
-                    handlerNetwork.post(taskTransmission);
-                    taskReceiving.updateLatestSentID(frameId);
-                } else {
-                    taskMatching.setData(frameId, frameData);
-                    handlerNetwork.post(taskMatching);
-                }
-            }
-
-            @Override
-            public void onMarkersChanged(MarkerGroup markerGroup) {
-                mRenderer.updateContents(markerGroup);
-            }
-        });
-
-        if(isCloudBased) {
             taskReceiving.setCallback(new ReceivingTask.Callback() {
                 @Override
                 public void onReceive(int resultID, MarkerGroup markerGroup) {
                     markerManager.updateMarkers(markerGroup, resultID);
                 }
             });
+            taskAnnotation = new AnnotationTask(ip, port);
+            taskAnnotation.setCallback(new AnnotationTask.Callback() {
+                @Override
+                public void onReceive(int markerID, String filePath) {
+                    callback.onAnnotationReceived(markerID, filePath);
+                    isAnnotationReceived = true;
+                    annotations.append(markerID, filePath);
+                }
+            });
+            annotations = new SparseArray<>();
         } else {
+            taskMatching = new MatchingTask(context);
             taskMatching.setCallback(new MatchingTask.Callback() {
                 @Override
                 public void onFinish(MarkerGroup markerGroup, int frameID) {
@@ -141,6 +130,32 @@ public class ArManager {
                 }
             });
         }
+
+        markerManager.setCallback(new MarkerImpl.Callback() {
+            @Override
+            public void onMarkersRecognized(MarkerGroup markerGroup) {
+                callback.onMarkersReady(markerGroup);
+
+                if(ARManager.isCloudBased) {
+                    int markerID = markerGroup.getIDs().get(0);
+                    String annotation = annotations.get(markerID);
+                    if (annotation != null) {
+                        Log.d(Constants.TAG, "local annotation found: " + annotation);
+                        callback.onAnnotationReceived(markerID, annotation);
+                        isAnnotationReceived = true;
+                    } else {
+                        taskAnnotation.setMarkerID(markerID);
+                        handlerNetwork.post(taskAnnotation);
+                        isAnnotationReceived = false;
+                    }
+                }
+            }
+
+            @Override
+            public void onMarkersChanged(MarkerGroup markerGroup) {
+                callback.onMarkersReady(markerGroup);
+            }
+        });
     }
 
     public void start() {
@@ -164,15 +179,42 @@ public class ArManager {
         }
     }
 
-    public void driveFrame(byte[] frameData){
+    public void recognize(byte[] frameData) {
+        if(!isAnnotationReceived) return;
+
+        taskFrame.setFrameData(++frameID, frameData, true);
+        handlerFrame.post(taskFrame);
+
+        if(ARManager.isCloudBased) {
+            taskTransmission.setData(frameID, frameData);
+            handlerNetwork.post(taskTransmission);
+            taskReceiving.updateLatestSentID(frameID);
+        } else {
+            taskMatching.setData(frameID, frameData);
+            handlerNetwork.post(taskMatching);
+        }
+    }
+
+    public void driveFrame(byte[] frameData) {
         if (taskFrame.isBusy()) return;
-        taskFrame.setFrameData(++frameID, frameData);
+        taskFrame.setFrameData(++frameID, frameData, false);
         handlerFrame.post(taskFrame);
 
         if(isCloudBased) handlerNetwork.post(taskReceiving);
     }
 
-    public int frameSnapshot(){
+    public int frameSnapshot() {
         return frameID;
+    }
+
+    private ARManager.Callback callback;
+
+    public void setCallback(ARManager.Callback callback) {
+        this.callback = callback;
+    }
+
+    public interface Callback {
+        void onMarkersReady(MarkerGroup markerGroup);
+        void onAnnotationReceived(int markerID, String annotationFile);
     }
 }

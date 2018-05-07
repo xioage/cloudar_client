@@ -24,14 +24,13 @@ public class ARCamera extends Camera {
 
     private double[] calcProjectionMatrix() {
         double[] projectionMatrix = new double[16];
-        double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
 
-        double fx = cameraMatrixData[0][0];
-        double fy = cameraMatrixData[1][1];
-        double cx = cameraMatrixData[0][2];
-        double cy = cameraMatrixData[1][2];
-        int width = 1920 / Constants.scale;
-        int height = 1080 / Constants.scale;
+        double fx = Constants.cameraMatrixData[0][0];
+        double fy = Constants.cameraMatrixData[1][1];
+        double cx = Constants.cameraMatrixData[0][2];
+        double cy = Constants.cameraMatrixData[1][2];
+        int width = Constants.previewWidth / Constants.scale;
+        int height = Constants.previewHeight / Constants.scale;
         int far = 1000;
         int near = 2;
 

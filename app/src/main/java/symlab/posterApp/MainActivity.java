@@ -16,8 +16,9 @@ import android.view.ViewGroup;
 
 import org.rajawali3d.view.ISurface;
 
-import symlab.CloudAR.ArManager;
+import symlab.CloudAR.ARManager;
 import symlab.CloudAR.Constants;
+import symlab.CloudAR.marker.MarkerGroup;
 import symlab.CloudAR.renderer.ARRenderer;
 import symlab.CloudAR.renderer.ARScene;
 
@@ -36,6 +37,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private DrawOnTop mDraw;
     private byte[] callbackBuffer;
     private int time_o, time_n, fps;
+    private boolean recoFlag = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,8 +67,25 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         mRenderer = new ARRenderer(this, mScene);
         mRenderSurface.setSurfaceRenderer(mRenderer);
         ((View) mRenderSurface).setOnTouchListener(this);
+        mRenderer.setCallback(new ARRenderer.Callback() {
+            @Override
+            public void onTouchResponse(boolean somethingPicked) {
+                if(!somethingPicked) recoFlag = true;
+            }
+        });
 
-        ArManager.getInstance().init(this, mRenderer, false);
+        ARManager.getInstance().init(this, true);
+        ARManager.getInstance().setCallback(new ARManager.Callback() {
+            @Override
+            public void onMarkersReady(MarkerGroup markerGroup) {
+                mRenderer.updateContents(markerGroup);
+            }
+
+            @Override
+            public void onAnnotationReceived(int markerID, String annotationFile) {
+                mRenderer.updateAnnotation(markerID, annotationFile);
+            }
+        });
     }
 
     @Override
@@ -81,7 +100,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         super.onResume();
 
         mCamera = Camera.open();
-        ArManager.getInstance().start();
+        ARManager.getInstance().start();
     }
 
     @Override
@@ -97,7 +116,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         mCamera = null;
         mInPreview = false;
 
-        ArManager.getInstance().stop();
+        ARManager.getInstance().stop();
         mRenderer.onActivityPause();
     }
 
@@ -115,7 +134,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
     @Override
     public boolean onTouch(View v, MotionEvent event) {
-        Log.d(Constants.TAG, "touch event");
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             mRenderer.getObjectAt(event.getX(), event.getY());
         }
@@ -168,16 +186,15 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     };
 
     Camera.PreviewCallback frameIMGProcCallback = new Camera.PreviewCallback() {
-        private int count = 0;
-
         @Override
         public void onPreviewFrame(byte[] data, Camera camera) {
             mCamera.addCallbackBuffer(callbackBuffer);
 
-            ArManager.getInstance().driveFrame(data);
-            count++;
-            if (Constants.Show2DView && count % 30 == 1) {
-                mDraw.updateData(ArManager.getInstance().frameSnapshot());
+            if (recoFlag) {
+                ARManager.getInstance().recognize(data);
+                recoFlag = false;
+            } else {
+                ARManager.getInstance().driveFrame(data);
             }
         }
     };

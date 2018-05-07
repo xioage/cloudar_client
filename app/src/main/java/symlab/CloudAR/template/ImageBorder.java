@@ -33,7 +33,7 @@ public class ImageBorder implements ARContent {
     }
 
     @Override
-    public void init(Context context, ObjectColorPicker mPicker) {
+    public void init(Context context, ObjectColorPicker mPicker, float width, float height) {
         this.context = context;
         this.mPicker = mPicker;
 
@@ -44,7 +44,7 @@ public class ImageBorder implements ARContent {
         baseMaterial.setColor(Color.TRANSPARENT);
         baseMaterial.setDiffuseMethod(new DiffuseMethod.Lambert());
         mBase.setMaterial(baseMaterial);
-        mBase.setVisible(false);
+        mBase.setVisible(true);
 
         Stack<Vector3> points = new Stack<>();
         points.add(new Vector3(-w, -h, 0));
@@ -73,25 +73,15 @@ public class ImageBorder implements ARContent {
     }
 
     @Override
-    public void onTargetRecognized() {
-        mBase.setVisible(true);
-    }
-
-    @Override
-    public void onTargetDisappear() {
-        mBase.setVisible(false);
-    }
-
-    @Override
     public boolean onTouch(Object3D object) {
         return false;
     }
 
     @Override
-    public void onSceneContentPicked(boolean isPicked) {
+    public void onAnnotationReceived(String annotationFile) {
     }
 
     @Override
-    public void onDestruction() {
+    public void destroy() {
     }
 }

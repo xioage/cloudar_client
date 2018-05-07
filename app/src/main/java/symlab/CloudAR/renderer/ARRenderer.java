@@ -5,16 +5,14 @@ import android.util.Log;
 import android.view.MotionEvent;
 
 import org.rajawali3d.Object3D;
-import org.rajawali3d.lights.PointLight;
+import org.rajawali3d.lights.DirectionalLight;
 import org.rajawali3d.math.Matrix4;
 import org.rajawali3d.renderer.Renderer;
 import org.rajawali3d.util.ObjectColorPicker;
 import org.rajawali3d.util.OnObjectPickedListener;
-import org.rajawali3d.util.RajLog;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import symlab.CloudAR.Constants;
 import symlab.CloudAR.marker.Marker;
@@ -24,7 +22,6 @@ import symlab.CloudAR.marker.MarkerGroup;
  * Created by wzhangal on 7/27/2016.
  */
 public class ARRenderer extends Renderer implements OnObjectPickedListener {
-    private ARCamera mCamera;
     private ARScene mScene;
     private ObjectColorPicker mPicker;
     private List<Integer> curMarkerIDs;
@@ -41,19 +38,15 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
         this.mPicker.setOnObjectPickedListener(this);
 
         for(float[] light : mScene.getLights()) {
-            PointLight pointLight = new PointLight();
-            pointLight.setPosition(light[0], light[1], light[2]);
-            pointLight.setLookAt(light[3], light[4], light[5]);
-            pointLight.setPower(light[6]);
-            getCurrentScene().addLight(pointLight);
+            DirectionalLight directionalLight = new DirectionalLight();
+            directionalLight.setPosition(light[0], light[1], light[2]);
+            directionalLight.setLookAt(light[3], light[4], light[5]);
+            directionalLight.setPower(light[6]);
+            directionalLight.enableLookAt();
+            getCurrentScene().addLight(directionalLight);
         }
 
-        for (Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet()) {
-            content.getValue().init(getContext(), mPicker);
-            getCurrentScene().addChild(content.getValue().getObject());
-        }
-
-        mCamera = new ARCamera();
+        ARCamera mCamera = new ARCamera();
         getCurrentScene().replaceAndSwitchCamera(getCurrentCamera(), mCamera);
     }
 
@@ -67,21 +60,26 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
             newIDs.removeAll(this.curMarkerIDs);
 
             for (Integer expiredID : expiredIDs) {
-                mScene.getContents().get(expiredID).onTargetDisappear();
+                ARContent expiredContent = mScene.getContentByID(expiredID);
+                expiredContent.destroy();
+                getCurrentScene().removeChild(expiredContent.getObject());
             }
 
             for (Integer newID : newIDs){
-                mScene.getContents().get(newID).onTargetRecognized();
+                ARContent newContent = mScene.getContentByID(newID);
+                Marker marker = markerGroup.getMarkerByID(newID);
+                newContent.init(mContext, mPicker, (float)marker.size.width, (float)marker.size.height);
+                getCurrentScene().addChild(newContent.getObject());
             }
         }
 
         for (int i = 0; i < markerGroup.size(); i++){
-            Marker marker = markerGroup.getMarker(i);
-            double[] orientation = marker.getOrientation();
+            Marker marker = markerGroup.getMarkerByIndex(i);
+            float[] orientation = marker.getOrientation();
 
             if(orientation != null) {
                 Matrix4 matrix = new Matrix4(orientation);
-                Object3D object = mScene.getContents().get(marker.getId()).getObject();
+                Object3D object = mScene.getContentByID(marker.ID).getObject();
                 object.setPosition(matrix.getTranslation());
                 object.setRotation(matrix.inverse());
             }
@@ -91,16 +89,18 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
             this.curMarkerIDs = new ArrayList<>(markerGroup.getIDs());
     }
 
+    public void updateAnnotation(int markerID, String annotationFile) {
+        mScene.getContentByID(markerID).onAnnotationReceived(annotationFile);
+    }
+
     @Override
     public void onRender(final long elapsedTime, final double deltaTime) {
         super.onRender(elapsedTime, deltaTime);
-        for (Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet())
-            content.getValue().updateTexture();
+        mScene.updateTexture(curMarkerIDs);
     }
 
     public void onActivityPause() {
-        for (Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet())
-            content.getValue().onDestruction();
+        mScene.onActivityPause();
     }
 
     @Override
@@ -115,19 +115,27 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
         mPicker.getObjectAt(x, y);
     }
 
+    @Override
     public void onObjectPicked(Object3D object) {
-        boolean isPicked = false;
-        for(Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet()) {
-            if(content.getValue().onTouch(object))
-                isPicked = true;
-        }
-        for(Map.Entry<Integer, ARContent> content : mScene.getContents().entrySet()) {
-            content.getValue().onSceneContentPicked(isPicked);
-        }
+        Log.v(Constants.TAG, "something picked");
+        callback.onTouchResponse(true);
+
+        mScene.onTouch(curMarkerIDs, object);
     }
 
     @Override
     public void onNoObjectPicked() {
-        RajLog.w("No object picked!");
+        Log.v(Constants.TAG, "No object picked!");
+        callback.onTouchResponse(false);
+    }
+
+    private ARRenderer.Callback callback;
+
+    public void setCallback(ARRenderer.Callback callback) {
+        this.callback = callback;
+    }
+
+    public interface Callback {
+        void onTouchResponse(boolean somethingPicked);
     }
 }

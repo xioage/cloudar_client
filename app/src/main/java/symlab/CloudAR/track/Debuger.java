@@ -49,7 +49,7 @@ public class Debuger {
 
     static public String debug(String name, Marker marker){
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("%s_%s = [", name, marker.getId()));
+        sb.append(String.format("%s_%s = [", name, marker.ID));
         for (int j=0; j<marker.getVertices().rows(); j++){
             sb.append(String.format("(%f, %f),", marker.getVertices().get(j, 0)[0], marker.getVertices().get(j, 0)[1]));
         }

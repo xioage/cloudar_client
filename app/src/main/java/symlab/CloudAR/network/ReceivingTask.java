@@ -30,6 +30,7 @@ public class ReceivingTask implements Runnable{
     private byte[] name = new byte[56];
     private int newMarkerNum;
     private int lastSentID;
+    private int recoTrackRatio = Constants.scale / Constants.recoScale;
 
     private DatagramChannel datagramChannel;
 
@@ -58,12 +59,12 @@ public class ReceivingTask implements Runnable{
         if (res != null) {
             System.arraycopy(res, 0, tmp, 0, 4);
             int resultID = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
-            System.arraycopy(res, 4, tmp, 0, 4);
+            System.arraycopy(res, 8, tmp, 0, 4);
             newMarkerNum = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
             if (resultID <= 5) {
                 Log.d(Constants.Eval, "metadata " + resultID + " received ");
-            } else if (resultID == lastSentID) {
+            } else if (resultID == lastSentID && newMarkerNum != 0) {
                 Log.d(Constants.Eval, "" + newMarkerNum + " res " + resultID + " received ");
                 MarkerGroup markerGroup = new MarkerGroup();
 
@@ -83,7 +84,7 @@ public class ReceivingTask implements Runnable{
                         floatres[j] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getFloat();
                     }
                     for (int j = 0; j < 4; j++)
-                        pointArray[j] = new Point(floatres[j * 2], floatres[j * 2 + 1]);
+                        pointArray[j] = new Point(floatres[j * 2]/recoTrackRatio, floatres[j * 2 + 1]/recoTrackRatio);
                     Rec.fromArray(pointArray);
 
                     System.arraycopy(res, 56 + i * 100, name, 0, 56);
@@ -91,7 +92,7 @@ public class ReceivingTask implements Runnable{
                     String Name = markerName;
                     //String Name = markerName.substring(0, markerName.indexOf("."));
 
-                    markerGroup.addMarker(new Marker(ID, Name, new Size(width, height), Rec));
+                    markerGroup.addMarker(new Marker(ID, Name, new Size(width/100.0, height/100.0), Rec));
                 }
 
                 if (callback != null){

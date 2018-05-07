@@ -12,26 +12,27 @@ import org.opencv.highgui.Highgui;
  */
 
 public class Constants {
-
     static public final int FREQUENCY = 120;
     static public final int previewWidth = 1920;
     static public final int previewHeight = 1080;
     static public final int scale = 4;
-    static public final int MAX_POINTS = 200;
+    static public final int recoScale = 2;
+    static public final int MAX_POINTS = 100;
     static public final org.opencv.core.Size winSize = new org.opencv.core.Size(10, 10);
     static public final org.opencv.core.Size subPixWinSize = new org.opencv.core.Size(1, 1);
     static public final TermCriteria termcrit = new TermCriteria(TermCriteria.MAX_ITER | TermCriteria.EPS, 20, 0.03);
     static public final String TAG = "Poster";
     static public final String Eval = "Evaluation";
-    static public final double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 2.3950000000000000e+002}, {0, 3.9324438974006659e+002, 1.3450000000000000e+002}, {0, 0, 1}};
-    static public final double[] distCoeffsData = new double[]{2.8048006231906419e-001, -1.1828928706191699e+000, 0, 0, 1.4865861018485209e+000};
-    static public final double[][] cvToGlData = new double[][]{{1.0, 0, 0, 0}, {0, -1.0, 0, 0}, {0, 0, -1.0, 0}, {0, 0, 0, 1.0}};
+    static public final double[][] cameraMatrixData = new double[][]{{3.9324438974006659e+002, 0, 240}, {0, 3.9324438974006659e+002, 135}, {0, 0, 1}};
+    //static public final double[][] cameraMatrixData = new double[][]{{803.52, 0, 480}, {0, 803.52, 270}, {0, 0, 1}};
+    static private final double[] distCoeffsData = new double[]{0, 0, 0, 0, 0};
+    static private final double[][] cvToGlData = new double[][]{{1.0, 0, 0, 0}, {0, -1.0, 0, 0}, {0, 0, -1.0, 0}, {0, 0, 0, 1.0}};
 
-    static public final MatOfInt Image_Params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 50);
+    static public final MatOfInt Image_Params = new MatOfInt(Highgui.IMWRITE_JPEG_QUALITY, 70);
     static public final int TRACKING_THRESHOLD = 10;
     static public final int SWITCH_THRESHOLD = 20;
 
-    static public final boolean EnableMultipleTracking = true;
+    static public final boolean EnableMultipleTracking = false;
     static public final boolean Show2DView = false;
 
     static public final MatOfDouble distCoeffs = new MatOfDouble();
@@ -49,6 +50,4 @@ public class Constants {
             for(int j = 0; j < 4; j++)
                 cvToGl.put(i, j, Constants.cvToGlData[i][j]);
     }
-
-
 }

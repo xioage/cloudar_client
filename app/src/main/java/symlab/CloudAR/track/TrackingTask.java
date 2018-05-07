@@ -22,13 +22,12 @@ public class TrackingTask implements Runnable{
     private byte[] frameData;
     private int frameID;
     private boolean busy;
+    private boolean isRecoFrame;
 
     private Mat YUVMatTrack, YUVMatScaled;
     private TrackModel preTrackModel;
 
-    public TrackingTask(Callback callback){
-        this.callback = callback;
-
+    public TrackingTask(){
         frameID = 0;
         busy = false;
         YUVMatTrack = new Mat(Constants.previewHeight + Constants.previewHeight / 2, Constants.previewWidth, CvType.CV_8UC1);
@@ -39,9 +38,10 @@ public class TrackingTask implements Runnable{
         return busy;
     }
 
-    public void setFrameData(int frameID, byte[] frameData){
+    public void setFrameData(int frameID, byte[] frameData, boolean isRecoFrame){
         this.frameData = frameData;
         this.frameID = frameID;
+        this.isRecoFrame = isRecoFrame;
     }
 
     private Mat procGrayImg(byte[] frmdata){
@@ -78,16 +78,16 @@ public class TrackingTask implements Runnable{
         MatOfPoint2f refinedNextPoint = new MatOfPoint2f(new Mat(totalValid, 1, nextFeature.type()));
 
         int iterator = 0, refinedCount = 0;
-        for (int i = 0; i< Constants.MAX_POINTS; i++){ //计算剩下的枚举器
-            if (bitmap[i] != 0){ //上一帧中的还有效
-                if (statusArray[iterator] != 0){ //当前帧也有效
+        for (int i = 0; i< Constants.MAX_POINTS; i++){
+            if (bitmap[i] != 0){
+                if (statusArray[iterator] != 0){
                     refinedPrePoint.put(refinedCount, 0, preFeature.get(iterator, 0).clone());
                     refinedNextPoint.put(refinedCount, 0, nextFeature.get(iterator, 0).clone());
                     refinedCount++;
-                } else { //已经消失了
+                } else {
                     bitmap[i] = 0;
                 }
-                iterator++; //下一对特征点
+                iterator++;
                 if (iterator == statusArray.length) break;
             }
         }
@@ -98,8 +98,6 @@ public class TrackingTask implements Runnable{
     @Override
     public void run() {
         busy = true;
-        boolean needSwitch = false;
-        if (callback != null) needSwitch = callback.onStart(frameID, frameData);
 
         Mat GRAYMat = procGrayImg(frameData);
 
@@ -107,7 +105,7 @@ public class TrackingTask implements Runnable{
         newTrackModel.GRAYMat = GRAYMat;
 
         Pair<Pair<MatOfPoint2f, MatOfPoint2f>, int[]> optFlow = null;
-        boolean canTrack = !needSwitch && (preTrackModel != null);
+        boolean canTrack = !isRecoFrame && (preTrackModel != null);
         if (canTrack){
             /**
              * optFlow.first.first   previous feature
@@ -134,9 +132,9 @@ public class TrackingTask implements Runnable{
             if (callback != null){
                 if (optFlow != null && optFlow.first.first.rows() > Constants.TRACKING_THRESHOLD) { //optFlow can be used
                     callback.onFinish(frameID, optFlow.first.first, optFlow.first.second, optFlow.second);
-                    callback.onPreSwitch(frameID, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone(), needSwitch);
+                    callback.onPreSwitch(frameID, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone(), isRecoFrame);
                 } else  {//optFlow can not be used
-                    callback.onPreSwitch(frameID, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone(), needSwitch);
+                    callback.onPreSwitch(frameID, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone(), isRecoFrame);
                     callback.onFinish(frameID, null, new MatOfPoint2f(newTrackModel.features.clone()), newTrackModel.bitmap.clone());
                 }
             }
