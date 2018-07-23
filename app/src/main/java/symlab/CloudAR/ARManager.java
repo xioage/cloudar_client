@@ -20,6 +20,7 @@ import symlab.CloudAR.marker.MarkerGroup;
 import symlab.CloudAR.network.AnnotationTask;
 import symlab.CloudAR.track.MarkerImpl;
 import symlab.CloudAR.track.MatchingTask;
+import symlab.CloudAR.track.MatchingTaskSlow;
 import symlab.CloudAR.track.TrackingTask;
 import symlab.CloudAR.network.ReceivingTask;
 import symlab.CloudAR.network.TransmissionTask;
@@ -40,7 +41,7 @@ public class ARManager {
     private TrackingTask taskFrame;
     private TransmissionTask taskTransmission;
     private ReceivingTask taskReceiving;
-    private MatchingTask taskMatching;
+    private MatchingTaskSlow taskMatching;
     private AnnotationTask taskAnnotation;
 
     private DatagramChannel dataChannel;
@@ -48,7 +49,8 @@ public class ARManager {
     private String ip;
     private int port;
 
-    private static boolean isCloudBased;
+    private Context context;
+    private boolean isCloudBased;
     private boolean isAnnotationReceived = true;
 
     private int frameID = 0;
@@ -90,14 +92,19 @@ public class ARManager {
     }
 
     public void init(Context context, boolean isCloudBased){
+        this.context = context;
         this.isCloudBased = isCloudBased;
 
         System.loadLibrary("opencv_java");
-        if(isCloudBased) initConnection();
+        System.loadLibrary("nonfree");
 
         this.handlerUtil = createAndStartThread("util thread", Process.THREAD_PRIORITY_DEFAULT); //start util thread
         this.handlerFrame = createAndStartThread("frame thread" , -1); //start frame processing thread
         this.handlerNetwork = createAndStartThread("network thread", 1);
+    }
+
+    public void start() {
+        if(isCloudBased) initConnection();
 
         markerManager = new MarkerImpl(handlerUtil);
         taskFrame = new TrackingTask();
@@ -122,7 +129,7 @@ public class ARManager {
             });
             annotations = new SparseArray<>();
         } else {
-            taskMatching = new MatchingTask(context);
+            taskMatching = new MatchingTaskSlow(context);
             taskMatching.setCallback(new MatchingTask.Callback() {
                 @Override
                 public void onFinish(MarkerGroup markerGroup, int frameID) {
@@ -136,7 +143,7 @@ public class ARManager {
             public void onMarkersRecognized(MarkerGroup markerGroup) {
                 callback.onMarkersReady(markerGroup);
 
-                if(ARManager.isCloudBased) {
+                if(isCloudBased) {
                     int markerID = markerGroup.getIDs().get(0);
                     String annotation = annotations.get(markerID);
                     if (annotation != null) {
@@ -156,9 +163,6 @@ public class ARManager {
                 callback.onMarkersReady(markerGroup);
             }
         });
-    }
-
-    public void start() {
     }
 
     public void stop() {
@@ -185,7 +189,7 @@ public class ARManager {
         taskFrame.setFrameData(++frameID, frameData, true);
         handlerFrame.post(taskFrame);
 
-        if(ARManager.isCloudBased) {
+        if(isCloudBased) {
             taskTransmission.setData(frameID, frameData);
             handlerNetwork.post(taskTransmission);
             taskReceiving.updateLatestSentID(frameID);

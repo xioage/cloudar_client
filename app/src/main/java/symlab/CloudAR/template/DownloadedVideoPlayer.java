@@ -218,7 +218,8 @@ public class DownloadedVideoPlayer implements ARContent{
     @Override
     public void destroy() {
         if(mMediaPlayer != null) {
-            mMediaPlayer.pause();
+            if(mMediaPlayer.isPlaying())
+                mMediaPlayer.pause();
             mMediaPlayer.release();
         }
         this.annotationContent = null;
