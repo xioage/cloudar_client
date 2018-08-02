@@ -38,6 +38,7 @@ public class MarkerImpl implements TrackingTask.Callback{
 
     private MarkerGroup markerGroup;
     private boolean newMarkerFlag;
+    private boolean markerOutOfScreenFlag = false;
     private int trackingID;
     private int markerFrameId;
     private Handler handler;
@@ -157,6 +158,18 @@ public class MarkerImpl implements TrackingTask.Callback{
                 MatOfPoint2f newRecs = new MatOfPoint2f();
                 Core.perspectiveTransform(marker.getVertices(), newRecs, marker.getHomography());
                 marker.setVertices(newRecs);
+
+                float middleW = 0, middleH = 0;
+                for(int idx = 0; idx < 4; idx++) {
+                    float[] point = new float[2];
+                    newRecs.get(idx, 0, point);
+                    middleW += point[0];
+                    middleH += point[1];
+                }
+                middleW /= 4;
+                middleH /= 4;
+                if(middleW < 0 || middleW > Constants.previewWidth/Constants.scale || middleH < 0 || middleH > Constants.previewHeight/Constants.scale)
+                    markerOutOfScreenFlag = true;
             } else {
             //    Log.d(Constants.TAG, "null rec");  //if no homography then the recs will be null
             }
@@ -218,6 +231,12 @@ public class MarkerImpl implements TrackingTask.Callback{
             @Override
             public void run() {
                 MatOfPoint2f oldFeatures = newMarkerFlag ? getHistoryFeatures(markerFrameId, trackingID, bitmap, features.rows()) : preFeature;
+
+                if(markerOutOfScreenFlag) {
+                    markerGroup = new MarkerGroup();
+                    markerOutOfScreenFlag = false;
+                    newMarkerFlag = true;
+                }
 
                 if (oldFeatures != null && markerGroup != null) {
                     findHomography(frameID, oldFeatures, features);

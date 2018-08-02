@@ -136,6 +136,7 @@ public class ARManager {
                     markerManager.updateMarkers(markerGroup, frameID);
                 }
             });
+            handlerNetwork.post(taskMatching);
         }
 
         markerManager.setCallback(new MarkerImpl.Callback() {
@@ -160,7 +161,7 @@ public class ARManager {
 
             @Override
             public void onMarkersChanged(MarkerGroup markerGroup) {
-                callback.onMarkersReady(markerGroup);
+                callback.onMarkersChanged(markerGroup);
             }
         });
     }
@@ -219,6 +220,7 @@ public class ARManager {
 
     public interface Callback {
         void onMarkersReady(MarkerGroup markerGroup);
+        void onMarkersChanged(MarkerGroup markerGroup);
         void onAnnotationReceived(int markerID, String annotationFile);
     }
 }

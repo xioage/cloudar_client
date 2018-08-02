@@ -21,6 +21,8 @@ import android.view.ViewGroup;
 
 import org.rajawali3d.view.ISurface;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
+
 import symlab.CloudAR.ARManager;
 import symlab.CloudAR.Constants;
 import symlab.CloudAR.marker.MarkerGroup;
@@ -41,6 +43,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean mCameraConfigured = false;
     private boolean mSurfaceCreated = false;
     private boolean managerStarted = false;
+    private boolean somethingRecognized = false;
     private DrawOnTop mDraw;
     private byte[] callbackBuffer;
     private int time_o, time_n, fps;
@@ -77,7 +80,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         mRenderer.setCallback(new ARRenderer.Callback() {
             @Override
             public void onTouchResponse(boolean somethingPicked) {
-                if(!somethingPicked) recoFlag = true;
+                if(!somethingPicked && !somethingRecognized) recoFlag = true;
             }
         });
 
@@ -85,6 +88,15 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         ARManager.getInstance().setCallback(new ARManager.Callback() {
             @Override
             public void onMarkersReady(MarkerGroup markerGroup) {
+                mRenderer.updateContents(markerGroup);
+                if(markerGroup.size() > 0) mDraw.setStatus(2);
+                else mDraw.setStatus(3);
+                mDraw.invalidate();
+                somethingRecognized = markerGroup.size() > 0;
+            }
+
+            @Override
+            public void onMarkersChanged(MarkerGroup markerGroup) {
                 mRenderer.updateContents(markerGroup);
             }
 
@@ -230,6 +242,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
             if (recoFlag) {
                 ARManager.getInstance().recognize(data);
+                mDraw.setStatus(1);
+                mDraw.invalidate();
                 recoFlag = false;
             } else {
                 ARManager.getInstance().driveFrame(data);
@@ -238,24 +252,38 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     };
 
     class DrawOnTop extends View {
-        Paint paintWord;
-        Paint paintLine;
-        private boolean ShowFPS = true;
-        private boolean ShowEdge = true;
-        private boolean ShowName = true;
-        private int preFrameID;
-        private int dispScale = Constants.scale;
+        private Paint paintWordGray;
+        private Paint paintWordRed;
+        private Paint paintWordGreen;
+        private Paint paintLine;
+
+        private int status = 0;
+
+        private long t0, t1;
 
         public DrawOnTop(Context context) {
             super(context);
 
-            paintWord = new Paint();
-            paintWord.setStyle(Paint.Style.STROKE);
-            paintWord.setStrokeWidth(5);
-            paintWord.setColor(Color.RED);
-            paintWord.setTextAlign(Paint.Align.CENTER);
-            paintWord.setTextSize(50);
+            paintWordGray = new Paint();
+            paintWordGray.setStyle(Paint.Style.STROKE);
+            paintWordGray.setStrokeWidth(5);
+            paintWordGray.setColor(Color.LTGRAY);
+            paintWordGray.setTextAlign(Paint.Align.LEFT);
+            paintWordGray.setTextSize(80);
 
+            paintWordRed = new Paint();
+            paintWordRed.setStyle(Paint.Style.FILL);
+            paintWordRed.setStrokeWidth(5);
+            paintWordRed.setColor(Color.RED);
+            paintWordRed.setTextAlign(Paint.Align.RIGHT);
+            paintWordRed.setTextSize(60);
+
+            paintWordGreen = new Paint();
+            paintWordGreen.setStyle(Paint.Style.FILL);
+            paintWordGreen.setStrokeWidth(5);
+            paintWordGreen.setColor(Color.GREEN);
+            paintWordGreen.setTextAlign(Paint.Align.CENTER);
+            paintWordGreen.setTextSize(120);
 
             paintLine = new Paint();
             paintLine.setStyle(Paint.Style.STROKE);
@@ -263,21 +291,35 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             paintLine.setColor(Color.GREEN);
         }
 
-        public void updateData(int frameID){
-            if (ShowFPS) {
-                time_n = (int) System.currentTimeMillis();
-                fps = 1000 * (frameID - preFrameID) / (time_n - time_o);
-                time_o = time_n;
-                preFrameID = frameID;
-            }
+        public void setStatus(int status) {
+            this.status = status;
         }
 
         @Override
         protected void onDraw(final Canvas canvas) {
             super.onDraw(canvas);
+            int width = canvas.getWidth();
+            int height = canvas.getHeight();
 
-            if (ShowFPS) {
-                canvas.drawText("fps: " + fps, 100, 50, paintWord);
+            canvas.drawText("AR Demo without Mobile Edge Computing ", 100, 100, paintWordGray);
+
+            switch (status) {
+                case 0:
+                    canvas.drawText("Tap on Movie Poster", width/2, height/2, paintWordGreen);
+                    break;
+                case 1:
+                    t0 = System.currentTimeMillis();
+                    canvas.drawText("Identifying Poster Locally", width/2, height/2, paintWordGreen);
+                    break;
+                case 2:
+                    t1 = System.currentTimeMillis();
+                    canvas.drawText("Poster Identified in: " + (t1 - t0) + "ms", width - 100, height - 50, paintWordRed);
+                    break;
+                case 3:
+                    canvas.drawText("Nothing In View, Please Tap Again", width/2, height/2, paintWordGreen);
+                    break;
+                default:
+                    break;
             }
         }
     }
