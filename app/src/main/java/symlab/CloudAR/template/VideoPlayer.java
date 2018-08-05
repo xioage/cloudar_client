@@ -116,7 +116,7 @@ public class VideoPlayer implements ARContent{
         }
         buttonMaterial.setColorInfluence(0);
         mButton.setMaterial(buttonMaterial);
-        mButton.setVisible(true);
+        mButton.setVisible(false);
         mBase.addChild(mButton);
 
         Stack<Vector3> points = new Stack<>();
@@ -217,8 +217,6 @@ public class VideoPlayer implements ARContent{
     @Override
     public void destroy() {
         if(mMediaPlayer != null) {
-            if (mMediaPlayer.isPlaying())
-                mMediaPlayer.pause();
             mMediaPlayer.release();
         }
         videoOn = false;

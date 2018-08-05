@@ -4,9 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
@@ -21,19 +18,18 @@ import android.view.ViewGroup;
 
 import org.rajawali3d.view.ISurface;
 
-import java.util.concurrent.ConcurrentLinkedQueue;
-
 import symlab.CloudAR.ARManager;
 import symlab.CloudAR.Constants;
 import symlab.CloudAR.marker.MarkerGroup;
+import symlab.CloudAR.renderer.AR2DView;
 import symlab.CloudAR.renderer.ARRenderer;
 import symlab.CloudAR.renderer.ARScene;
 
 
 public class MainActivity extends Activity implements View.OnTouchListener{
-
     private ARScene mScene;
     private SurfaceView mPreview;
+    private AR2DView mDraw;
     private SurfaceHolder mPreviewHolder;
     protected ISurface mRenderSurface;
     protected ARRenderer mRenderer;
@@ -44,9 +40,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean mSurfaceCreated = false;
     private boolean managerStarted = false;
     private boolean somethingRecognized = false;
-    private DrawOnTop mDraw;
-    private byte[] callbackBuffer;
     private boolean recoFlag = false;
+    private byte[] callbackBuffer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,11 +61,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         mPreviewHolder.addCallback(surfaceCallback);
         mPreview.setZOrderMediaOverlay(false);
 
-        if (Constants.Show2DView) {
-            mDraw = new DrawOnTop(this);
-            addContentView(mDraw, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        }
-
         mScene = new PosterScene();
         mRenderSurface = (org.rajawali3d.view.SurfaceView) findViewById(R.id.rajwali_surface);
         mRenderer = new ARRenderer(this, mScene);
@@ -83,13 +73,15 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             }
         });
 
+        mDraw = (AR2DView)findViewById(R.id.textview);
+
         ARManager.getInstance().init(this, false);
         ARManager.getInstance().setCallback(new ARManager.Callback() {
             @Override
             public void onMarkersReady(MarkerGroup markerGroup) {
                 mRenderer.updateContents(markerGroup);
                 if(markerGroup.size() > 0) mDraw.setStatus(2);
-                else mDraw.setStatus(3);
+                else mDraw.setStatus(4);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -246,86 +238,14 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
             if (recoFlag) {
                 ARManager.getInstance().recognize(data);
+                recoFlag = false;
+                somethingRecognized = true;
                 mDraw.setStatus(1);
                 mDraw.invalidate();
-                recoFlag = false;
             } else {
                 ARManager.getInstance().driveFrame(data);
+                mDraw.pulse();
             }
         }
     };
-
-    class DrawOnTop extends View {
-        private Paint paintWordGray;
-        private Paint paintWordRed;
-        private Paint paintWordGreen;
-        private Paint paintLine;
-
-        private int status = 0;
-
-        private long t0, t1;
-
-        public DrawOnTop(Context context) {
-            super(context);
-
-            paintWordGray = new Paint();
-            paintWordGray.setStyle(Paint.Style.STROKE);
-            paintWordGray.setStrokeWidth(5);
-            paintWordGray.setColor(Color.LTGRAY);
-            paintWordGray.setTextAlign(Paint.Align.LEFT);
-            paintWordGray.setTextSize(80);
-
-            paintWordRed = new Paint();
-            paintWordRed.setStyle(Paint.Style.FILL);
-            paintWordRed.setStrokeWidth(5);
-            paintWordRed.setColor(Color.RED);
-            paintWordRed.setTextAlign(Paint.Align.RIGHT);
-            paintWordRed.setTextSize(60);
-
-            paintWordGreen = new Paint();
-            paintWordGreen.setStyle(Paint.Style.FILL);
-            paintWordGreen.setStrokeWidth(5);
-            paintWordGreen.setColor(Color.CYAN);
-            paintWordGreen.setTextAlign(Paint.Align.CENTER);
-            paintWordGreen.setTextSize(120);
-
-            paintLine = new Paint();
-            paintLine.setStyle(Paint.Style.STROKE);
-            paintLine.setStrokeWidth(10);
-            paintLine.setColor(Color.GREEN);
-        }
-
-        public void setStatus(int status) {
-            this.status = status;
-        }
-
-        @Override
-        protected void onDraw(final Canvas canvas) {
-            super.onDraw(canvas);
-            int width = canvas.getWidth();
-            int height = canvas.getHeight();
-
-            canvas.drawText("Without Mobile Edge Computing ", 100, 100, paintWordGray);
-
-            switch (status) {
-                case 0:
-                    canvas.drawText("Tap On Screen For Recognition", width/2, height/2, paintWordGreen);
-                    break;
-                case 1:
-                    t0 = System.currentTimeMillis();
-                    canvas.drawText("Identifying Poster Locally", width/2, height/2, paintWordGreen);
-                    canvas.drawText("Please Keep Poster In View!", width - 100, height - 50, paintWordRed);
-                    break;
-                case 2:
-                    t1 = System.currentTimeMillis();
-                    canvas.drawText("Poster Identified in: " + (t1 - t0)/1000.0f + "s", width - 100, height - 50, paintWordRed);
-                    break;
-                case 3:
-                    canvas.drawText("No Poster In View, Please Tap Again", width/2, height/2, paintWordGreen);
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
 }
