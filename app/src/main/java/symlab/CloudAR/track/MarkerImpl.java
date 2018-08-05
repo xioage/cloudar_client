@@ -36,7 +36,7 @@ import symlab.CloudAR.marker.MarkerGroup;
  */
 public class MarkerImpl implements TrackingTask.Callback{
 
-    private MarkerGroup markerGroup;
+    private MarkerGroup markerGroup = new MarkerGroup();
     private boolean newMarkerFlag;
     private boolean markerOutOfScreenFlag = false;
     private int trackingID;
@@ -232,22 +232,25 @@ public class MarkerImpl implements TrackingTask.Callback{
             public void run() {
                 MatOfPoint2f oldFeatures = newMarkerFlag ? getHistoryFeatures(markerFrameId, trackingID, bitmap, features.rows()) : preFeature;
 
-                if(markerOutOfScreenFlag) {
-                    markerGroup = new MarkerGroup();
-                    markerOutOfScreenFlag = false;
-                    newMarkerFlag = true;
-                }
-
-                if (oldFeatures != null && markerGroup != null) {
+                if (oldFeatures != null) {
                     findHomography(frameID, oldFeatures, features);
                     transformBound();
-                    calcModelMatrix();
+                    if(markerOutOfScreenFlag) {
+                        markerGroup = new MarkerGroup();
+                        markerOutOfScreenFlag = false;
+                        newMarkerFlag = true;
+                    } else {
+                        calcModelMatrix();
+                    }
                     if (callback != null) {
                         if(newMarkerFlag)
                             callback.onMarkersRecognized(markerGroup);
                         else
                             callback.onMarkersChanged(markerGroup);
                     }
+                } else if (newMarkerFlag) {
+                    markerGroup = new MarkerGroup();
+                    if(callback != null) callback.onMarkersRecognized(markerGroup);
                 }
                 newMarkerFlag = false;
             }

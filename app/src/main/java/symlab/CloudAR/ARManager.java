@@ -130,7 +130,7 @@ public class ARManager {
             annotations = new SparseArray<>();
         } else {
             taskMatching = new MatchingTaskSlow(context);
-            taskMatching.setCallback(new MatchingTask.Callback() {
+            taskMatching.setCallback(new MatchingTaskSlow.Callback() {
                 @Override
                 public void onFinish(MarkerGroup markerGroup, int frameID) {
                     markerManager.updateMarkers(markerGroup, frameID);

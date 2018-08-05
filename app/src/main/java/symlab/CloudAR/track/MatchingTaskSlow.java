@@ -141,6 +141,12 @@ public class MatchingTaskSlow implements Runnable{
                 }
             }
 
+            try {
+                Thread.sleep(1300);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
             MarkerGroup markerGroup = new MarkerGroup();
             if (best_matches.size() >= 80) {
                 LinkedList<Point> objList = new LinkedList<>();
@@ -185,9 +191,9 @@ public class MatchingTaskSlow implements Runnable{
         }
     }
 
-    private MatchingTask.Callback callback;
+    private MatchingTaskSlow.Callback callback;
 
-    public void setCallback(MatchingTask.Callback callback) {
+    public void setCallback(MatchingTaskSlow.Callback callback) {
         this.callback = callback;
     }
 

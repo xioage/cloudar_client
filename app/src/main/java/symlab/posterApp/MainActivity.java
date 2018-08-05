@@ -46,7 +46,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean somethingRecognized = false;
     private DrawOnTop mDraw;
     private byte[] callbackBuffer;
-    private int time_o, time_n, fps;
     private boolean recoFlag = false;
 
     @Override
@@ -56,7 +55,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         setContentView(R.layout.activity_main);
 
-        mPreview = findViewById(R.id.preview);
+        mPreview = (SurfaceView)findViewById(R.id.preview);
         mPreview.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                 | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
@@ -91,7 +90,12 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 mRenderer.updateContents(markerGroup);
                 if(markerGroup.size() > 0) mDraw.setStatus(2);
                 else mDraw.setStatus(3);
-                mDraw.invalidate();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mDraw.invalidate();
+                    }
+                });
                 somethingRecognized = markerGroup.size() > 0;
             }
 
@@ -281,7 +285,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             paintWordGreen = new Paint();
             paintWordGreen.setStyle(Paint.Style.FILL);
             paintWordGreen.setStrokeWidth(5);
-            paintWordGreen.setColor(Color.GREEN);
+            paintWordGreen.setColor(Color.CYAN);
             paintWordGreen.setTextAlign(Paint.Align.CENTER);
             paintWordGreen.setTextSize(120);
 
@@ -301,22 +305,23 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             int width = canvas.getWidth();
             int height = canvas.getHeight();
 
-            canvas.drawText("AR Demo without Mobile Edge Computing ", 100, 100, paintWordGray);
+            canvas.drawText("Without Mobile Edge Computing ", 100, 100, paintWordGray);
 
             switch (status) {
                 case 0:
-                    canvas.drawText("Tap on Movie Poster", width/2, height/2, paintWordGreen);
+                    canvas.drawText("Tap On Screen For Recognition", width/2, height/2, paintWordGreen);
                     break;
                 case 1:
                     t0 = System.currentTimeMillis();
                     canvas.drawText("Identifying Poster Locally", width/2, height/2, paintWordGreen);
+                    canvas.drawText("Please Keep Poster In View!", width - 100, height - 50, paintWordRed);
                     break;
                 case 2:
                     t1 = System.currentTimeMillis();
-                    canvas.drawText("Poster Identified in: " + (t1 - t0) + "ms", width - 100, height - 50, paintWordRed);
+                    canvas.drawText("Poster Identified in: " + (t1 - t0)/1000.0f + "s", width - 100, height - 50, paintWordRed);
                     break;
                 case 3:
-                    canvas.drawText("Nothing In View, Please Tap Again", width/2, height/2, paintWordGreen);
+                    canvas.drawText("No Poster In View, Please Tap Again", width/2, height/2, paintWordGreen);
                     break;
                 default:
                     break;

@@ -39,8 +39,9 @@ public class VideoPlayer implements ARContent{
     private StreamingTexture mVideoTexture;
     private String url = "rtsp://";
     private int videoID;
+    private int timeSinceBirth;
 
-    private boolean videoOn = false;
+    private boolean videoOn;
     private boolean onlineVideo = false;
 
     public VideoPlayer(int videoID) {
@@ -50,6 +51,8 @@ public class VideoPlayer implements ARContent{
     @Override
     public void init(Context context, ObjectColorPicker mPicker, float width, float height) {
         Log.d(Constants.Eval, "image border created: " + width + " x " + height);
+        timeSinceBirth = 0;
+
         mBase = new Plane(0.001f, 0.001f, 1, 1);
         mBase.setPosition(0, 0, 0);
         Material baseMaterial = new Material();
@@ -77,6 +80,18 @@ public class VideoPlayer implements ARContent{
             mMediaPlayer = MediaPlayer.create(context, this.videoID);
         }
         mMediaPlayer.setLooping(false);
+        mMediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer mp) {
+                mMediaPlayer.pause();
+                mMediaPlayer.seekTo(0);
+                mTrailer.setVisible(false);
+                mButton.setVisible(true);
+                mBorder.setVisible(true);
+                mCover.setVisible(true);
+                videoOn = false;
+            }
+        });
         mVideoTexture = new StreamingTexture("trailer", mMediaPlayer);
         Material trailerMaterial = new Material();
         trailerMaterial.setColorInfluence(0);
@@ -149,8 +164,18 @@ public class VideoPlayer implements ARContent{
 
     @Override
     public void updateTexture() {
+        timeSinceBirth++;
         if(videoOn)
             mVideoTexture.update();
+        else if(timeSinceBirth == 60) {
+            mButton.setVisible(false);
+            mBorder.setVisible(false);
+            mCover.setVisible(false);
+            mTrailer.setVisible(true);
+            mMediaPlayer.start();
+            videoOn = true;
+        }
+
     }
 
     @Override
@@ -196,5 +221,6 @@ public class VideoPlayer implements ARContent{
                 mMediaPlayer.pause();
             mMediaPlayer.release();
         }
+        videoOn = false;
     }
 }

@@ -1,12 +1,12 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 27
+    compileSdkVersion 24
     buildToolsVersion '27.0.3'
     defaultConfig {
         applicationId 'symlab.cloudridar.poster_local'
         minSdkVersion 24
-        targetSdkVersion 27
+        targetSdkVersion 24
         versionCode 1
         versionName "1.0"
     }
