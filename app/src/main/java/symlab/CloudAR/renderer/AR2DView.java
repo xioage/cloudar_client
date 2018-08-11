@@ -8,10 +8,11 @@ import android.util.AttributeSet;
 import android.view.View;
 
 public class AR2DView extends View {
-    private Paint paintWordGray, paintWordRed, paintWordGreen, paintWordRedLarge;
+    private Paint paintWordGray, paintWordRed, paintWordGreen;
     private int status = 0;
     private int pulseCount = 31;
     private long t0, t1, tl;
+    private int orange = Color.rgb(234, 116, 0);
 
     public AR2DView(Context context, AttributeSet attributeSet) {
         super(context, attributeSet);
@@ -19,40 +20,36 @@ public class AR2DView extends View {
         paintWordGray = new Paint();
         paintWordGray.setStyle(Paint.Style.STROKE);
         paintWordGray.setStrokeWidth(5);
-        paintWordGray.setColor(Color.LTGRAY);
+        paintWordGray.setColor(orange);
         paintWordGray.setTextAlign(Paint.Align.LEFT);
         paintWordGray.setTextSize(80);
 
         paintWordRed = new Paint();
         paintWordRed.setStyle(Paint.Style.FILL);
         paintWordRed.setStrokeWidth(5);
-        paintWordRed.setColor(Color.RED);
+        paintWordRed.setColor(orange);
         paintWordRed.setTextAlign(Paint.Align.RIGHT);
         paintWordRed.setTextSize(60);
 
         paintWordGreen = new Paint();
         paintWordGreen.setStyle(Paint.Style.FILL);
         paintWordGreen.setStrokeWidth(5);
-        paintWordGreen.setColor(Color.CYAN);
+        paintWordGreen.setColor(orange);
         paintWordGreen.setTextAlign(Paint.Align.CENTER);
         paintWordGreen.setTextSize(120);
-
-        paintWordRedLarge = new Paint();
-        paintWordRedLarge.setStyle(Paint.Style.FILL);
-        paintWordRedLarge.setStrokeWidth(5);
-        paintWordRedLarge.setColor(Color.RED);
-        paintWordRedLarge.setTextAlign(Paint.Align.CENTER);
-        paintWordRedLarge.setTextSize(120);
     }
 
     public void setStatus(int status) {
         this.status = status;
-        if(status == 2) pulseCount = 0;
+        if(status == 1) t0 = System.currentTimeMillis();
+        else if(status == 2) pulseCount = 0;
     }
 
     public void pulse() {
         pulseCount++;
-        if(pulseCount == 30) {
+        if(status == 1) {
+            this.invalidate();
+        } else if(pulseCount == 30) {
             this.status = 3;
             this.invalidate();
         }
@@ -71,14 +68,16 @@ public class AR2DView extends View {
                 canvas.drawText("Tap On Screen For Recognition", width/2, height/2, paintWordGreen);
                 break;
             case 1:
-                t0 = System.currentTimeMillis();
+                t1 = System.currentTimeMillis();
+                tl = t1 - t0;
                 canvas.drawText("Identifying Poster Locally", width/2, height/2, paintWordGreen);
+                canvas.drawText("" + tl/1000.0f + "seconds", width/2, height/2 + 100, paintWordGreen);
                 canvas.drawText("Please Keep Poster In View!", width - 100, height - 50, paintWordRed);
                 break;
             case 2:
                 t1 = System.currentTimeMillis();
                 tl = t1 - t0;
-                canvas.drawText("Poster Identified in: " + tl/1000.0f + "s", width/2, height/2, paintWordRedLarge);
+                canvas.drawText("Poster Identified in: " + tl/1000.0f + "s", width/2, height/2, paintWordGreen);
                 break;
             case 3:
                 canvas.drawText("Poster Identified in: " + tl/1000.0f + "s", width - 100, height - 50, paintWordRed);

@@ -85,9 +85,9 @@ public class MatchingTaskSlow implements Runnable{
             localDescriptors = new LinkedList<>();
 
             try {
-                images.add(Utils.loadResource(context, R.drawable.tfos_poster));
-                images.add(Utils.loadResource(context, R.drawable.tig_poster));
-                images.add(Utils.loadResource(context, R.drawable.mjd_poster));
+                images.add(Utils.loadResource(context, R.drawable.aquaman));
+                images.add(Utils.loadResource(context, R.drawable.fantastic));
+                images.add(Utils.loadResource(context, R.drawable.smallfoot));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -148,7 +148,7 @@ public class MatchingTaskSlow implements Runnable{
             }
 
             MarkerGroup markerGroup = new MarkerGroup();
-            if (best_matches.size() >= 80) {
+            if (best_matches.size() >= 50) {
                 LinkedList<Point> objList = new LinkedList<>();
                 LinkedList<Point> sceneList = new LinkedList<>();
                 for (int i = 0; i < best_matches.size(); i++) {

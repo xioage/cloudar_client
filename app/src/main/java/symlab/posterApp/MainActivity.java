@@ -244,8 +244,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 mDraw.invalidate();
             } else {
                 ARManager.getInstance().driveFrame(data);
-                mDraw.pulse();
             }
+            mDraw.pulse();
         }
     };
 }

@@ -17,11 +17,11 @@ public class PosterScene extends ARScene {
         //bind(0, videoPlayer);
         //VideoPlayer videoPlayer1 = new VideoPlayer(R.raw.batmanvsuperman);
         //bind(1, videoPlayer1);
-        VideoPlayer videoPlayer2 = new VideoPlayer(R.raw.tfos);
+        VideoPlayer videoPlayer2 = new VideoPlayer(R.raw.aquaman);
         bind(0, videoPlayer2);
-        VideoPlayer videoPlayer3 = new VideoPlayer(R.raw.tig);
+        VideoPlayer videoPlayer3 = new VideoPlayer(R.raw.fantastic);
         bind(1, videoPlayer3);
-        VideoPlayer videoPlayer4 = new VideoPlayer(R.raw.mjd);
+        VideoPlayer videoPlayer4 = new VideoPlayer(R.raw.smallfoot);
         bind(2, videoPlayer4);
 
 

@@ -66,7 +66,7 @@ public class VideoPlayer implements ARContent{
         float h = height / 2.0f;
         float d = width / 3.0f;
 
-        mTrailer = new Plane(height * 16 / 9, height, 1, 1, Vector3.Axis.Z);
+        mTrailer = new Plane(1.05f * height * 16 / 9, 1.05f * height, 1, 1, Vector3.Axis.Z);
         mTrailer.setPosition(0, 0, 0.1);
         if (onlineVideo) {
             mMediaPlayer = new MediaPlayer();
