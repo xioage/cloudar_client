@@ -75,7 +75,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
 
         mDraw = (AR2DView)findViewById(R.id.textview);
 
-        ARManager.getInstance().init(this, false);
+        ARManager.getInstance().init(this, true);
         ARManager.getInstance().setCallback(new ARManager.Callback() {
             @Override
             public void onMarkersReady(MarkerGroup markerGroup) {
@@ -241,7 +241,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 recoFlag = false;
                 somethingRecognized = true;
                 mDraw.setStatus(1);
-                mDraw.invalidate();
             } else {
                 ARManager.getInstance().driveFrame(data);
             }

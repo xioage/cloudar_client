@@ -51,6 +51,7 @@ public class ARManager {
 
     private Context context;
     private boolean isCloudBased;
+    private boolean isCloudAnnotation = false;
     private boolean isAnnotationReceived = true;
 
     private int frameID = 0;
@@ -118,16 +119,18 @@ public class ARManager {
                     markerManager.updateMarkers(markerGroup, resultID);
                 }
             });
-            taskAnnotation = new AnnotationTask(ip, port);
-            taskAnnotation.setCallback(new AnnotationTask.Callback() {
-                @Override
-                public void onReceive(int markerID, String filePath) {
-                    callback.onAnnotationReceived(markerID, filePath);
-                    isAnnotationReceived = true;
-                    annotations.append(markerID, filePath);
-                }
-            });
-            annotations = new SparseArray<>();
+            if(isCloudAnnotation) {
+                taskAnnotation = new AnnotationTask(ip, port);
+                taskAnnotation.setCallback(new AnnotationTask.Callback() {
+                    @Override
+                    public void onReceive(int markerID, String filePath) {
+                        callback.onAnnotationReceived(markerID, filePath);
+                        isAnnotationReceived = true;
+                        annotations.append(markerID, filePath);
+                    }
+                });
+                annotations = new SparseArray<>();
+            }
         } else {
             taskMatching = new MatchingTaskSlow(context);
             taskMatching.setCallback(new MatchingTaskSlow.Callback() {
@@ -144,7 +147,7 @@ public class ARManager {
             public void onMarkersRecognized(MarkerGroup markerGroup) {
                 callback.onMarkersReady(markerGroup);
 
-                if(isCloudBased) {
+                if(isCloudBased && isCloudAnnotation) {
                     int markerID = markerGroup.getIDs().get(0);
                     String annotation = annotations.get(markerID);
                     if (annotation != null) {

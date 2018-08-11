@@ -61,7 +61,7 @@ public class AR2DView extends View {
         int width = canvas.getWidth();
         int height = canvas.getHeight();
 
-        canvas.drawText("Without Mobile Edge Computing ", 100, 100, paintWordGray);
+        canvas.drawText("With Mobile Edge Computing ", 100, 100, paintWordGray);
 
         switch (status) {
             case 0:
@@ -70,7 +70,7 @@ public class AR2DView extends View {
             case 1:
                 t1 = System.currentTimeMillis();
                 tl = t1 - t0;
-                canvas.drawText("Identifying Poster Locally", width/2, height/2, paintWordGreen);
+                canvas.drawText("Identifying Poster Remotely", width/2, height/2, paintWordGreen);
                 canvas.drawText("" + tl/1000.0f + "seconds", width/2, height/2 + 100, paintWordGreen);
                 canvas.drawText("Please Keep Poster In View!", width - 100, height - 50, paintWordRed);
                 break;
