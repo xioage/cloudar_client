@@ -77,13 +77,16 @@ public class AR2DView extends View {
             case 2:
                 t1 = System.currentTimeMillis();
                 tl = t1 - t0;
-                canvas.drawText("Poster Identified in: " + tl/1000.0f + "s", width/2, height/2, paintWordGreen);
+                canvas.drawText("Poster Identified In: " + tl/1000.0f + "s", width/2, height/2, paintWordGreen);
                 break;
             case 3:
-                canvas.drawText("Poster Identified in: " + tl/1000.0f + "s", width - 100, height - 50, paintWordRed);
+                canvas.drawText("Poster Identified In: " + tl/1000.0f + "s", width - 100, height - 50, paintWordRed);
                 break;
             case 4:
                 canvas.drawText("No Poster In View, Please Tap Again", width/2, height/2, paintWordGreen);
+                break;
+            case 5:
+                canvas.drawText("Network Issue Encountered, Please Tap Again", width/2, height/2, paintWordGreen);
                 break;
             default:
                 break;

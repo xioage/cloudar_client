@@ -64,7 +64,7 @@ public class ReceivingTask implements Runnable{
 
             if (resultID <= 5) {
                 Log.d(Constants.Eval, "metadata " + resultID + " received ");
-            } else if (resultID == lastSentID && newMarkerNum != 0) {
+            } else if (resultID == lastSentID) {
                 Log.d(Constants.Eval, "" + newMarkerNum + " res " + resultID + " received ");
                 MarkerGroup markerGroup = new MarkerGroup();
 

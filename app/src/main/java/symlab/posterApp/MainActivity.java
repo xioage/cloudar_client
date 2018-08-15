@@ -41,6 +41,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean managerStarted = false;
     private boolean somethingRecognized = false;
     private boolean recoFlag = false;
+    private int timeoutCounter = 151;
     private byte[] callbackBuffer;
 
     @Override
@@ -89,6 +90,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                     }
                 });
                 somethingRecognized = markerGroup.size() > 0;
+                timeoutCounter += 151;
             }
 
             @Override
@@ -240,9 +242,16 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 ARManager.getInstance().recognize(data);
                 recoFlag = false;
                 somethingRecognized = true;
+                timeoutCounter = 0;
                 mDraw.setStatus(1);
             } else {
                 ARManager.getInstance().driveFrame(data);
+                timeoutCounter++;
+                if(timeoutCounter == 150) {
+                    somethingRecognized = false;
+                    mDraw.setStatus(5);
+                    mDraw.invalidate();
+                }
             }
             mDraw.pulse();
         }
