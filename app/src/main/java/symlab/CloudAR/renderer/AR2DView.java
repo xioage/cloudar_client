@@ -13,6 +13,7 @@ public class AR2DView extends View {
     private int pulseCount = 31;
     private long t0, t1, tl;
     private int orange = Color.rgb(234, 116, 0);
+    private boolean isCloudBased;
 
     public AR2DView(Context context, AttributeSet attributeSet) {
         super(context, attributeSet);
@@ -39,6 +40,10 @@ public class AR2DView extends View {
         paintWordGreen.setTextSize(120);
     }
 
+    public void setCloudStatus(boolean isCloudBased) {
+        this.isCloudBased = isCloudBased;
+    }
+
     public void setStatus(int status) {
         this.status = status;
         if(status == 1) t0 = System.currentTimeMillis();
@@ -61,16 +66,22 @@ public class AR2DView extends View {
         int width = canvas.getWidth();
         int height = canvas.getHeight();
 
-        canvas.drawText("With Mobile Edge Computing ", 100, 100, paintWordGray);
+        if(this.isCloudBased)
+            canvas.drawText("With Mobile Edge Computing ", 100, 100, paintWordGray);
+        else
+            canvas.drawText("Without Mobile Edge Computing ", 100, 100, paintWordGray);
 
         switch (status) {
             case 0:
-                canvas.drawText("Tap On Screen For Recognition", width/2, height/2, paintWordGreen);
+                canvas.drawText("Tap On Poster For Recognition", width/2, height/2, paintWordGreen);
                 break;
             case 1:
                 t1 = System.currentTimeMillis();
                 tl = t1 - t0;
-                canvas.drawText("Identifying Poster Remotely", width/2, height/2, paintWordGreen);
+                if(this.isCloudBased)
+                    canvas.drawText("Identifying Poster Remotely", width/2, height/2, paintWordGreen);
+                else
+                    canvas.drawText("Identifying Poster Locally", width/2, height/2, paintWordGreen);
                 canvas.drawText("" + tl/1000.0f + "seconds", width/2, height/2 + 100, paintWordGreen);
                 canvas.drawText("Please Keep Poster In View!", width - 100, height - 50, paintWordRed);
                 break;
@@ -86,7 +97,8 @@ public class AR2DView extends View {
                 canvas.drawText("No Poster In View, Please Tap Again", width/2, height/2, paintWordGreen);
                 break;
             case 5:
-                canvas.drawText("Network Issue Encountered, Please Tap Again", width/2, height/2, paintWordGreen);
+                canvas.drawText("Network Issue Encountered!", width/2, height/2, paintWordGreen);
+                canvas.drawText("Please Tap Again", width/2, height/2 + 100, paintWordGreen);
                 break;
             default:
                 break;

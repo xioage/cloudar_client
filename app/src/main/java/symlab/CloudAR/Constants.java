@@ -1,5 +1,7 @@
 package symlab.CloudAR;
 
+import android.content.res.Resources;
+
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
@@ -15,8 +17,11 @@ public class Constants {
     static public final int FREQUENCY = 120;
     static public final int previewWidth = 1920;
     static public final int previewHeight = 1080;
+    static public final int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
+    static public final int screenHeight = Resources.getSystem().getDisplayMetrics().heightPixels;
     static public final int scale = 4;
     static public final int recoScale = 2;
+    static public final int cropScale = 3;
     static public final int MAX_POINTS = 100;
     static public final org.opencv.core.Size winSize = new org.opencv.core.Size(10, 10);
     static public final org.opencv.core.Size subPixWinSize = new org.opencv.core.Size(1, 1);

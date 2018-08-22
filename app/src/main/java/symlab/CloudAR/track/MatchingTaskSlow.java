@@ -1,6 +1,7 @@
 package symlab.CloudAR.track;
 
 import android.content.Context;
+import android.os.Environment;
 import android.util.Log;
 
 import org.opencv.android.Utils;
@@ -12,6 +13,7 @@ import org.opencv.core.MatOfDMatch;
 import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Size;
 import org.opencv.features2d.DMatch;
 import org.opencv.features2d.DescriptorExtractor;
@@ -20,11 +22,8 @@ import org.opencv.features2d.FeatureDetector;
 import org.opencv.features2d.Features2d;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
-import org.opencv.objdetect.Objdetect;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -34,10 +33,10 @@ import symlab.CloudAR.marker.MarkerGroup;
 import symlab.posterApp.R;
 
 import static symlab.CloudAR.Constants.Eval;
+import static symlab.CloudAR.Constants.cropScale;
 import static symlab.CloudAR.Constants.previewHeight;
 import static symlab.CloudAR.Constants.previewWidth;
 import static symlab.CloudAR.Constants.recoScale;
-import static symlab.CloudAR.Constants.scale;
 
 /**
  * Created by wzhangal on 4/24/2017.
@@ -48,6 +47,7 @@ public class MatchingTaskSlow implements Runnable{
     private Context context;
     private byte[] frameData;
     private int frameID;
+    private int offset;
 
     private List<Mat> images;
     private List<MatOfKeyPoint> localKeypoints;
@@ -58,8 +58,10 @@ public class MatchingTaskSlow implements Runnable{
     private DescriptorMatcher matcher;
 
     private Mat YUV = new Mat(previewHeight + previewHeight / 2, previewWidth, CvType.CV_8UC1);
-    private Mat YUVScaled = new Mat((previewHeight + previewHeight / 2) / scale, previewWidth / scale, CvType.CV_8UC1);
-    private Mat GrayScaled = new Mat(previewHeight / recoScale, previewWidth / recoScale, CvType.CV_8UC1);
+    private Mat YUVScaled = new Mat((previewHeight + previewHeight / 2) / recoScale, previewWidth / recoScale, CvType.CV_8UC1);
+    private Mat GrayCropped = new Mat(previewHeight / recoScale, previewWidth / recoScale / cropScale, CvType.CV_8UC1);
+
+    private int recoTrackRatio = Constants.scale / Constants.recoScale;
 
     public MatchingTaskSlow(Context context) {
         this.context = context;
@@ -69,9 +71,10 @@ public class MatchingTaskSlow implements Runnable{
         matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE);
     }
 
-    public void setData(int frameID, byte[] frameData){
+    public void setData(int frameID, byte[] frameData, int offset){
         this.frameData = frameData;
         this.frameID = frameID;
+        this.offset = offset / Constants.recoScale;
     }
 
     public void run() {
@@ -96,7 +99,7 @@ public class MatchingTaskSlow implements Runnable{
                 MatOfKeyPoint localKeypoint = new MatOfKeyPoint();
                 Mat localDescriptor = new Mat();
 
-                int scale = image.height() / 320;
+                int scale = image.height() / 500;
                 Imgproc.resize(image, image, new Size(image.width() / scale, image.height() / scale), 0, 0, Imgproc.INTER_LINEAR);
                 Imgproc.cvtColor(image, image, Imgproc.COLOR_RGB2GRAY);
 
@@ -114,10 +117,11 @@ public class MatchingTaskSlow implements Runnable{
 
             YUV.put(0, 0, frameData);
             Imgproc.resize(YUV, YUVScaled, YUVScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-            Imgproc.cvtColor(YUVScaled, GrayScaled, Imgproc.COLOR_YUV420sp2GRAY);
+            Mat YUVCropped = new Mat(YUVScaled, new Rect(this.offset, 0, Constants.previewWidth / recoScale / cropScale, Constants.previewHeight / recoScale));
+            Imgproc.cvtColor(YUVCropped, GrayCropped, Imgproc.COLOR_YUV420sp2GRAY);
 
-            detector.detect(GrayScaled, points);
-            descriptorExtractor.compute(GrayScaled, points, descriptors);
+            detector.detect(GrayCropped, points);
+            descriptorExtractor.compute(GrayCropped, points, descriptors);
 
             LinkedList<DMatch> best_matches = null;
             int best_match_num = 0;
@@ -129,12 +133,12 @@ public class MatchingTaskSlow implements Runnable{
                 LinkedList<DMatch> good_matches = new LinkedList<>();
 
                 for (int i = 0; i < descriptors.rows(); i++) {
-                    if (matchesList.get(i).distance < 200) {
+                    if (matchesList.get(i).distance < 150) {
                         good_matches.addLast(matchesList.get(i));
                     }
                 }
                 Log.d(Constants.TAG, "good matches:" + good_matches.size());
-                if (good_matches.size() > best_match_num) {
+                if (good_matches.size() >= best_match_num) {
                     best_match_num = good_matches.size();
                     best_matches = good_matches;
                     best_index = m;
@@ -148,7 +152,7 @@ public class MatchingTaskSlow implements Runnable{
             }
 
             MarkerGroup markerGroup = new MarkerGroup();
-            if (best_matches.size() >= 50) {
+            if (best_matches.size() >= 10) {
                 LinkedList<Point> objList = new LinkedList<>();
                 LinkedList<Point> sceneList = new LinkedList<>();
                 for (int i = 0; i < best_matches.size(); i++) {
@@ -177,6 +181,11 @@ public class MatchingTaskSlow implements Runnable{
                 targetCorners.fromArray(pointArray);
                 Core.perspectiveTransform(targetCorners, sceneCorners, Homography);
 
+                pointArray = sceneCorners.toArray();
+                for (int j = 0; j < 4; j++)
+                    pointArray[j] = new Point((pointArray[j].x + this.offset)/recoTrackRatio, pointArray[j].y/recoTrackRatio);
+                sceneCorners.fromArray(pointArray);
+
                 String Name = "localImage" + best_index;
 
                 markerGroup.addMarker(new Marker(best_index, Name, new Size(width, height), sceneCorners));
@@ -200,4 +209,60 @@ public class MatchingTaskSlow implements Runnable{
     public interface Callback {
         void onFinish(MarkerGroup markerGroup, int frameID);
     }
+
+
+    /*public void run() {
+        images = new LinkedList<>();
+        localKeypoints = new LinkedList<>();
+        localDescriptors = new LinkedList<>();
+
+        try {
+            images.add(Utils.loadResource(context, R.drawable.aquaman));
+            images.add(Utils.loadResource(context, R.drawable.fantastic));
+            images.add(Utils.loadResource(context, R.drawable.smallfoot));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        for (Mat image : images) {
+            MatOfKeyPoint localKeypoint = new MatOfKeyPoint();
+            Mat localDescriptor = new Mat();
+
+            int scale = image.height() / 300;
+            Imgproc.resize(image, image, new Size(image.width() / scale, image.height() / scale), 0, 0, Imgproc.INTER_LINEAR);
+            Imgproc.cvtColor(image, image, Imgproc.COLOR_RGB2GRAY);
+
+            detector.detect(image, localKeypoint);
+            localKeypoints.add(localKeypoint);
+            descriptorExtractor.compute(image, localKeypoint, localDescriptor);
+            localDescriptors.add(localDescriptor);
+        }
+
+        for (int idx = 0; idx < 6; idx++) {
+            MatOfKeyPoint points = new MatOfKeyPoint();
+            Mat descriptors = new Mat();
+
+            Mat RGB = Highgui.imread("" + Environment.getExternalStorageDirectory() + "/CloudAR/test/" + idx + ".jpg");
+            Mat RGBScaled = new Mat(previewHeight / 2, previewWidth / 2, CvType.CV_8UC3);
+            Imgproc.resize(RGB, RGBScaled, RGBScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
+            Imgproc.cvtColor(RGBScaled, GrayScaled, Imgproc.COLOR_BGR2GRAY);
+
+            detector.detect(GrayScaled, points);
+            descriptorExtractor.compute(GrayScaled, points, descriptors);
+
+            for (int m = 0; m < images.size(); m++) {
+                MatOfDMatch matches = new MatOfDMatch();
+                matcher.match(descriptors, localDescriptors.get(m), matches);
+                LinkedList<DMatch> matchesList = new LinkedList<>(matches.toList());
+                LinkedList<DMatch> good_matches = new LinkedList<>();
+
+                for (int i = 0; i < descriptors.rows(); i++) {
+                    if (matchesList.get(i).distance < 120) {
+                        good_matches.addLast(matchesList.get(i));
+                    }
+                }
+                Log.d(Constants.TAG, "good matches:" + good_matches.size());
+            }
+        }
+    }*/
 }

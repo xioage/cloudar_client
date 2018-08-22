@@ -187,18 +187,25 @@ public class ARManager {
         }
     }
 
-    public void recognize(byte[] frameData) {
+    public void recognize(byte[] frameData, float x, float y) {
         if(!isAnnotationReceived) return;
 
         taskFrame.setFrameData(++frameID, frameData, true);
         handlerFrame.post(taskFrame);
 
+        int halfWidth = Constants.previewWidth / Constants.cropScale / 2;
+        int offset = (int)x - halfWidth;
+        if(offset < 0)
+            offset = 0;
+        else if(offset > (Constants.previewWidth - halfWidth * 2))
+            offset = Constants.previewWidth - halfWidth * 2;
+
         if(isCloudBased) {
-            taskTransmission.setData(frameID, frameData);
+            taskTransmission.setData(frameID, frameData, offset);
             handlerNetwork.post(taskTransmission);
-            taskReceiving.updateLatestSentID(frameID);
+            taskReceiving.updateLatestSentID(frameID, offset);
         } else {
-            taskMatching.setData(frameID, frameData);
+            taskMatching.setData(frameID, frameData, offset);
             handlerNetwork.post(taskMatching);
         }
     }

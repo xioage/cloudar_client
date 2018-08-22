@@ -1,20 +1,27 @@
 package symlab.CloudAR.network;
 
+import android.os.Environment;
 import android.util.Log;
 
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
+import org.opencv.core.Rect;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
 
 import symlab.CloudAR.Constants;
+
+import static symlab.CloudAR.Constants.cropScale;
+import static symlab.CloudAR.Constants.recoScale;
 
 /**
  * Created by st0rm23 on 2017/2/20.
@@ -37,7 +44,8 @@ public class TransmissionTask implements Runnable {
     private DatagramChannel datagramChannel;
     private SocketAddress serverAddress;
 
-    public Mat YUVMatTrans, YUVMatScaled, GrayScaled;
+    private Mat YUVMatTrans, YUVMatScaled, YUVCropped, GrayCropped;
+    private int offset;
 
     public TransmissionTask(DatagramChannel datagramChannel, SocketAddress serverAddress) {
         this.datagramChannel = datagramChannel;
@@ -45,12 +53,13 @@ public class TransmissionTask implements Runnable {
 
         YUVMatTrans = new Mat(Constants.previewHeight + Constants.previewHeight / 2, Constants.previewWidth, CvType.CV_8UC1);
         YUVMatScaled = new Mat((Constants.previewHeight + Constants.previewHeight / 2) / Constants.recoScale, Constants.previewWidth / Constants.recoScale, CvType.CV_8UC1);
-        GrayScaled = new Mat(Constants.previewHeight / Constants.recoScale, Constants.previewWidth / Constants.recoScale, CvType.CV_8UC1);
+        GrayCropped = new Mat(Constants.previewHeight / Constants.recoScale, Constants.previewWidth / Constants.recoScale / Constants.cropScale, CvType.CV_8UC1);
     }
 
-    public void setData(int frmID, byte[] frameData){
+    public void setData(int frmID, byte[] frameData, int offset){
         this.frmID = frmID;
         this.frameData = frameData;
+        this.offset = offset / Constants.recoScale;
 
         if (this.frmID <= 5) dataType = MESSAGE_META;
         else dataType = IMAGE_DETECT;
@@ -62,12 +71,13 @@ public class TransmissionTask implements Runnable {
             YUVMatTrans.put(0, 0, frameData);
 
             Imgproc.resize(YUVMatTrans, YUVMatScaled, YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-            Imgproc.cvtColor(YUVMatScaled, GrayScaled, Imgproc.COLOR_YUV420sp2GRAY);
+            Mat YUVCropped = new Mat(YUVMatScaled, new Rect(this.offset, 0, Constants.previewWidth / recoScale / cropScale, Constants.previewHeight / recoScale));
+            Imgproc.cvtColor(YUVCropped, GrayCropped, Imgproc.COLOR_YUV420sp2GRAY);
         }
 
         if (dataType == IMAGE_DETECT) {
             MatOfByte imgbuff = new MatOfByte();
-            Highgui.imencode(".jpg", GrayScaled, imgbuff, Constants.Image_Params);
+            Highgui.imencode(".jpg", GrayCropped, imgbuff, Constants.Image_Params);
 
             datasize = (int) (imgbuff.total() * imgbuff.channels());
             frmdataToSend = new byte[datasize];

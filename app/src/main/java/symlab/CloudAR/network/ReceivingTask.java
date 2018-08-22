@@ -31,6 +31,7 @@ public class ReceivingTask implements Runnable{
     private int newMarkerNum;
     private int lastSentID;
     private int recoTrackRatio = Constants.scale / Constants.recoScale;
+    private int offset;
 
     private DatagramChannel datagramChannel;
 
@@ -38,8 +39,9 @@ public class ReceivingTask implements Runnable{
         this.datagramChannel = datagramChannel;
     }
 
-    public void updateLatestSentID(int lastSentID){
+    public void updateLatestSentID(int lastSentID, int offset){
         this.lastSentID = lastSentID;
+        this.offset = offset / Constants.recoScale;
     }
 
     @Override
@@ -84,7 +86,7 @@ public class ReceivingTask implements Runnable{
                         floatres[j] = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getFloat();
                     }
                     for (int j = 0; j < 4; j++)
-                        pointArray[j] = new Point(floatres[j * 2]/recoTrackRatio, floatres[j * 2 + 1]/recoTrackRatio);
+                        pointArray[j] = new Point((floatres[j * 2] + offset)/recoTrackRatio, floatres[j * 2 + 1]/recoTrackRatio);
                     Rec.fromArray(pointArray);
 
                     System.arraycopy(res, 56 + i * 100, name, 0, 56);

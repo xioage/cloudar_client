@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
@@ -43,6 +44,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean recoFlag = false;
     private int timeoutCounter = 151;
     private byte[] callbackBuffer;
+    private boolean isCloudBased = true;
+    private float touchX, touchY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,8 +78,9 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         });
 
         mDraw = (AR2DView)findViewById(R.id.textview);
+        mDraw.setCloudStatus(isCloudBased);
 
-        ARManager.getInstance().init(this, true);
+        ARManager.getInstance().init(this, isCloudBased);
         ARManager.getInstance().setCallback(new ARManager.Callback() {
             @Override
             public void onMarkersReady(MarkerGroup markerGroup) {
@@ -165,6 +169,8 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     public boolean onTouch(View v, MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             mRenderer.getObjectAt(event.getX(), event.getY());
+            touchX = event.getX() / (1.0f * Constants.screenWidth / Constants.previewWidth);
+            touchY = event.getY() / (1.0f * Constants.screenHeight / Constants.previewHeight);
         }
 
         return this.onTouchEvent(event);
@@ -239,7 +245,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             mCamera.addCallbackBuffer(callbackBuffer);
 
             if (recoFlag) {
-                ARManager.getInstance().recognize(data);
+                ARManager.getInstance().recognize(data, touchX, touchY);
                 recoFlag = false;
                 somethingRecognized = true;
                 timeoutCounter = 0;
@@ -247,7 +253,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
             } else {
                 ARManager.getInstance().driveFrame(data);
                 timeoutCounter++;
-                if(timeoutCounter == 150) {
+                if(isCloudBased && timeoutCounter == 150) {
                     somethingRecognized = false;
                     mDraw.setStatus(5);
                     mDraw.invalidate();
