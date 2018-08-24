@@ -155,7 +155,7 @@ public class MatchingTaskSlow implements Runnable{
             }
 
             MarkerGroup markerGroup = new MarkerGroup();
-            if (best_matches.size() >= 10) {
+            if (best_matches.size() >= 15) {
                 LinkedList<Point> objList = new LinkedList<>();
                 LinkedList<Point> sceneList = new LinkedList<>();
                 for (int i = 0; i < best_matches.size(); i++) {

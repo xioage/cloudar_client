@@ -43,7 +43,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean somethingRecognized = false;
     private boolean recoFlag = false;
     private byte[] callbackBuffer;
-    private boolean isCloudBased = true;
+    private boolean isCloudBased = false;
     private float touchX, touchY;
 
     @Override
