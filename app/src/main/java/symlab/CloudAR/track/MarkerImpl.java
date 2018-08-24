@@ -35,7 +35,6 @@ import symlab.CloudAR.marker.MarkerGroup;
  * @version 1.0
  */
 public class MarkerImpl implements TrackingTask.Callback{
-
     private MarkerGroup markerGroup = new MarkerGroup();
     private boolean newMarkerFlag;
     private boolean markerOutOfScreenFlag = false;

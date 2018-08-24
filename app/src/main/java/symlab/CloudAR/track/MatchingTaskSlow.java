@@ -26,6 +26,7 @@ import org.opencv.imgproc.Imgproc;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import symlab.CloudAR.Constants;
 import symlab.CloudAR.marker.Marker;
@@ -45,6 +46,7 @@ import static symlab.CloudAR.Constants.recoScale;
 public class MatchingTaskSlow implements Runnable{
 
     private Context context;
+    private Set<Integer> contentIDs;
     private byte[] frameData;
     private int frameID;
     private int offset;
@@ -63,8 +65,9 @@ public class MatchingTaskSlow implements Runnable{
 
     private int recoTrackRatio = Constants.scale / Constants.recoScale;
 
-    public MatchingTaskSlow(Context context) {
+    public MatchingTaskSlow(Context context, Set<Integer> contentIDs) {
         this.context = context;
+        this.contentIDs = contentIDs;
 
         detector = FeatureDetector.create(FeatureDetector.SIFT);
         descriptorExtractor = DescriptorExtractor.create(DescriptorExtractor.SIFT);
@@ -99,7 +102,7 @@ public class MatchingTaskSlow implements Runnable{
                 MatOfKeyPoint localKeypoint = new MatOfKeyPoint();
                 Mat localDescriptor = new Mat();
 
-                int scale = image.height() / 500;
+                int scale = 2;
                 Imgproc.resize(image, image, new Size(image.width() / scale, image.height() / scale), 0, 0, Imgproc.INTER_LINEAR);
                 Imgproc.cvtColor(image, image, Imgproc.COLOR_RGB2GRAY);
 
@@ -188,7 +191,8 @@ public class MatchingTaskSlow implements Runnable{
 
                 String Name = "localImage" + best_index;
 
-                markerGroup.addMarker(new Marker(best_index, Name, new Size(width, height), sceneCorners));
+                if(contentIDs == null || contentIDs.contains(best_index))
+                    markerGroup.addMarker(new Marker(best_index, Name, new Size(width, height), sceneCorners));
             } else {
                 Log.d(Constants.TAG, "good matches not enough");
             }

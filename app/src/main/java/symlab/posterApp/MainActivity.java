@@ -42,7 +42,6 @@ public class MainActivity extends Activity implements View.OnTouchListener{
     private boolean managerStarted = false;
     private boolean somethingRecognized = false;
     private boolean recoFlag = false;
-    private int timeoutCounter = 151;
     private byte[] callbackBuffer;
     private boolean isCloudBased = true;
     private float touchX, touchY;
@@ -80,7 +79,7 @@ public class MainActivity extends Activity implements View.OnTouchListener{
         mDraw = (AR2DView)findViewById(R.id.textview);
         mDraw.setCloudStatus(isCloudBased);
 
-        ARManager.getInstance().init(this, isCloudBased);
+        ARManager.getInstance().init(this, isCloudBased, mScene.getContentIDs());
         ARManager.getInstance().setCallback(new ARManager.Callback() {
             @Override
             public void onMarkersReady(MarkerGroup markerGroup) {
@@ -94,12 +93,18 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                     }
                 });
                 somethingRecognized = markerGroup.size() > 0;
-                timeoutCounter += 151;
             }
 
             @Override
             public void onMarkersChanged(MarkerGroup markerGroup) {
                 mRenderer.updateContents(markerGroup);
+            }
+
+            @Override
+            public void onCloudTimeout() {
+                somethingRecognized = false;
+                mDraw.setStatus(5);
+                mDraw.invalidate();
             }
 
             @Override
@@ -248,16 +253,9 @@ public class MainActivity extends Activity implements View.OnTouchListener{
                 ARManager.getInstance().recognize(data, touchX, touchY);
                 recoFlag = false;
                 somethingRecognized = true;
-                timeoutCounter = 0;
                 mDraw.setStatus(1);
             } else {
                 ARManager.getInstance().driveFrame(data);
-                timeoutCounter++;
-                if(isCloudBased && timeoutCounter == 150) {
-                    somethingRecognized = false;
-                    mDraw.setStatus(5);
-                    mDraw.invalidate();
-                }
             }
             mDraw.pulse();
         }

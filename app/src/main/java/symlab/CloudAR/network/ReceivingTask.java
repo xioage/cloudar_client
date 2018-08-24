@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
+import java.util.Set;
 
 import symlab.CloudAR.marker.Marker;
 import symlab.CloudAR.marker.MarkerGroup;
@@ -32,20 +33,31 @@ public class ReceivingTask implements Runnable{
     private int lastSentID;
     private int recoTrackRatio = Constants.scale / Constants.recoScale;
     private int offset;
+    private int timeoutCounter = Constants.TIMEOUT + 1;
 
     private DatagramChannel datagramChannel;
+    private Set<Integer> contentIDs;
 
-    public ReceivingTask(DatagramChannel datagramChannel){
+    public ReceivingTask(DatagramChannel datagramChannel, Set<Integer> contentIDs){
         this.datagramChannel = datagramChannel;
+        this.contentIDs = contentIDs;
     }
 
     public void updateLatestSentID(int lastSentID, int offset){
         this.lastSentID = lastSentID;
         this.offset = offset / Constants.recoScale;
+        this.timeoutCounter = 0;
     }
 
     @Override
     public void run() {
+        this.timeoutCounter++;
+        if (this.timeoutCounter >= Constants.TIMEOUT) {
+            if(this.timeoutCounter == Constants.TIMEOUT)
+                this.callback.onTimeout();
+            return;
+        }
+
         resPacket.clear();
         try {
             if (datagramChannel.receive(resPacket) != null) {
@@ -94,11 +106,13 @@ public class ReceivingTask implements Runnable{
                     String Name = markerName;
                     //String Name = markerName.substring(0, markerName.indexOf("."));
 
-                    markerGroup.addMarker(new Marker(ID, Name, new Size(width/100.0, height/100.0), Rec));
+                    if(contentIDs == null || contentIDs.contains(ID))
+                        markerGroup.addMarker(new Marker(ID, Name, new Size(width/100.0, height/100.0), Rec));
                 }
 
                 if (callback != null){
                     callback.onReceive(resultID, markerGroup);
+                    this.timeoutCounter = Constants.TIMEOUT + 1;
                 }
             } else {
                 Log.d(Constants.TAG, "discard outdate result: " + resultID);
@@ -114,5 +128,6 @@ public class ReceivingTask implements Runnable{
 
     public interface Callback {
         void onReceive(int resultID, MarkerGroup markerGroup);
+        void onTimeout();
     }
 }

@@ -15,6 +15,7 @@ import org.opencv.highgui.Highgui;
 
 public class Constants {
     static public final int FREQUENCY = 120;
+    static public final int TIMEOUT = 30;
     static public final int previewWidth = 1920;
     static public final int previewHeight = 1080;
     static public final int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
@@ -39,6 +40,7 @@ public class Constants {
 
     static public final boolean EnableMultipleTracking = false;
     static public final boolean Show2DView = true;
+    static public final boolean EnableUniversalContent = false;
 
     static public final MatOfDouble distCoeffs = new MatOfDouble();
     static public final Mat cameraMatrix = new Mat(3, 3, CvType.CV_64FC1);

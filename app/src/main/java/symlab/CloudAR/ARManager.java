@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
+import java.util.Set;
+
 import symlab.CloudAR.marker.MarkerGroup;
 import symlab.CloudAR.network.AnnotationTask;
 import symlab.CloudAR.track.MarkerImpl;
@@ -53,6 +55,7 @@ public class ARManager {
     private boolean isCloudBased;
     private boolean isCloudAnnotation = false;
     private boolean isAnnotationReceived = true;
+    private Set<Integer> contentIDs;
 
     private int frameID = 0;
     private MarkerGroup markers;
@@ -92,9 +95,10 @@ public class ARManager {
         } catch (Exception e) {}
     }
 
-    public void init(Context context, boolean isCloudBased){
+    public void init(Context context, boolean isCloudBased, Set<Integer> contentIDs){
         this.context = context;
         this.isCloudBased = isCloudBased;
+        this.contentIDs = contentIDs;
 
         System.loadLibrary("opencv_java");
         System.loadLibrary("nonfree");
@@ -112,11 +116,16 @@ public class ARManager {
         taskFrame.setCallback(markerManager);
         if(isCloudBased) {
             taskTransmission = new TransmissionTask(dataChannel, serverAddr);
-            taskReceiving = new ReceivingTask(dataChannel);
+            taskReceiving = new ReceivingTask(dataChannel, contentIDs);
             taskReceiving.setCallback(new ReceivingTask.Callback() {
                 @Override
                 public void onReceive(int resultID, MarkerGroup markerGroup) {
                     markerManager.updateMarkers(markerGroup, resultID);
+                }
+
+                @Override
+                public void onTimeout() {
+                    callback.onCloudTimeout();
                 }
             });
             if(isCloudAnnotation) {
@@ -132,7 +141,7 @@ public class ARManager {
                 annotations = new SparseArray<>();
             }
         } else {
-            taskMatching = new MatchingTaskSlow(context);
+            taskMatching = new MatchingTaskSlow(context, contentIDs);
             taskMatching.setCallback(new MatchingTaskSlow.Callback() {
                 @Override
                 public void onFinish(MarkerGroup markerGroup, int frameID) {
@@ -231,6 +240,7 @@ public class ARManager {
     public interface Callback {
         void onMarkersReady(MarkerGroup markerGroup);
         void onMarkersChanged(MarkerGroup markerGroup);
+        void onCloudTimeout();
         void onAnnotationReceived(int markerID, String annotationFile);
     }
 }

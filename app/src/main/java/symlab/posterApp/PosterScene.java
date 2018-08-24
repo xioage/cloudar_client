@@ -1,5 +1,6 @@
 package symlab.posterApp;
 
+import symlab.CloudAR.Constants;
 import symlab.CloudAR.renderer.ARScene;
 import symlab.CloudAR.template.DownloadedVideoPlayer;
 import symlab.CloudAR.template.VideoPlayer;
@@ -11,8 +12,10 @@ import symlab.CloudAR.template.VideoPlayer;
 public class PosterScene extends ARScene {
 
     public PosterScene() {
-        DownloadedVideoPlayer videoPlayer = new DownloadedVideoPlayer();
-        addUniversalContent(videoPlayer);
+        if(Constants.EnableUniversalContent) {
+            DownloadedVideoPlayer videoPlayer = new DownloadedVideoPlayer();
+            addUniversalContent(videoPlayer);
+        }
         //VideoPlayer videoPlayer = new VideoPlayer(R.raw.london);
         //bind(0, videoPlayer);
         //VideoPlayer videoPlayer1 = new VideoPlayer(R.raw.batmanvsuperman);

@@ -67,9 +67,11 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
 
             for (Integer newID : newIDs) {
                 ARContent newContent = mScene.getContentByID(newID);
-                Marker marker = markerGroup.getMarkerByID(newID);
-                newContent.init(mContext, mPicker, (float)marker.size.width, (float)marker.size.height);
-                getCurrentScene().addChild(newContent.getObject());
+                if(newContent != null) {
+                    Marker marker = markerGroup.getMarkerByID(newID);
+                    newContent.init(mContext, mPicker, (float) marker.size.width, (float) marker.size.height);
+                    getCurrentScene().addChild(newContent.getObject());
+                }
             }
         }
 
