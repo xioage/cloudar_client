@@ -2,30 +2,31 @@ package symlab.CloudAR;
 
 import android.content.Context;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Process;
 import android.util.Log;
 import android.util.SparseArray;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.channels.Channel;
 import java.nio.channels.DatagramChannel;
+import java.nio.channels.SocketChannel;
 import java.util.Set;
 
 import symlab.CloudAR.marker.MarkerGroup;
 import symlab.CloudAR.network.AnnotationTask;
+import symlab.CloudAR.network.ConnectionTask;
+import symlab.CloudAR.network.ReceivingTask;
+import symlab.CloudAR.network.SendingTask;
+import symlab.CloudAR.network.TCPReceivingTask;
+import symlab.CloudAR.network.TCPSendingTask;
 import symlab.CloudAR.track.MarkerImpl;
-import symlab.CloudAR.track.MatchingTask;
 import symlab.CloudAR.track.MatchingTaskSlow;
 import symlab.CloudAR.track.TrackingTask;
-import symlab.CloudAR.network.ReceivingTask;
-import symlab.CloudAR.network.TransmissionTask;
+import symlab.CloudAR.network.UDPReceivingTask;
+import symlab.CloudAR.network.UDPSendingTask;
 
 /**
  * Created by st0rm23 on 2017/2/18.
@@ -41,24 +42,22 @@ public class ARManager {
 
     private MarkerImpl markerManager;
     private TrackingTask taskFrame;
-    private TransmissionTask taskTransmission;
+    private ConnectionTask taskConnection;
+    private SendingTask taskSending;
     private ReceivingTask taskReceiving;
     private MatchingTaskSlow taskMatching;
     private AnnotationTask taskAnnotation;
 
-    private DatagramChannel dataChannel;
-    private SocketAddress serverAddr;
-    private String ip;
-    private int port;
+    private Channel channel;
 
     private Context context;
     private boolean isCloudBased;
+    private boolean isUDPBased = false;
     private boolean isCloudAnnotation = false;
     private boolean isAnnotationReceived = true;
     private Set<Integer> contentIDs;
 
     private int frameID = 0;
-    private MarkerGroup markers;
     private SparseArray<String> annotations;
 
     private ARManager(){ super(); }
@@ -76,25 +75,6 @@ public class ARManager {
         return new Handler(handlerThread.getLooper());
     }
 
-    private void initConnection() {
-        File sdcard = Environment.getExternalStorageDirectory();
-        File file = new File(sdcard,"CloudAR/cloudConfig.txt");
-        try {
-            BufferedReader br = new BufferedReader(new FileReader(file));
-
-            ip = br.readLine();
-            port = Integer.parseInt(br.readLine());
-            br.close();
-
-            serverAddr = new InetSocketAddress(ip, port);
-            dataChannel = DatagramChannel.open();
-            dataChannel.configureBlocking(false);
-            dataChannel.socket().connect(serverAddr);
-        } catch (IOException e) {
-            Log.d(Constants.TAG, "config file error");
-        } catch (Exception e) {}
-    }
-
     public void init(Context context, boolean isCloudBased, Set<Integer> contentIDs){
         this.context = context;
         this.isCloudBased = isCloudBased;
@@ -109,37 +89,46 @@ public class ARManager {
     }
 
     public void start() {
-        if(isCloudBased) initConnection();
-
-        markerManager = new MarkerImpl(handlerUtil);
-        taskFrame = new TrackingTask();
-        taskFrame.setCallback(markerManager);
         if(isCloudBased) {
-            taskTransmission = new TransmissionTask(dataChannel, serverAddr);
-            taskReceiving = new ReceivingTask(dataChannel, contentIDs);
-            taskReceiving.setCallback(new ReceivingTask.Callback() {
+            taskConnection = new ConnectionTask(isUDPBased);
+            taskConnection.setCallback(new ConnectionTask.Callback() {
                 @Override
-                public void onReceive(int resultID, MarkerGroup markerGroup) {
-                    markerManager.updateMarkers(markerGroup, resultID);
-                }
+                public void onConnectionBuilt(String ip, int port, Channel chan, SocketAddress serverAddress) {
+                    channel = chan;
 
-                @Override
-                public void onTimeout() {
-                    callback.onCloudTimeout();
+                    if(isUDPBased) {
+                        taskSending = new UDPSendingTask((DatagramChannel)channel, serverAddress);
+                        taskReceiving = new UDPReceivingTask((DatagramChannel)channel, contentIDs);
+                    } else {
+                        taskSending = new TCPSendingTask((SocketChannel)channel, serverAddress);
+                        taskReceiving = new TCPReceivingTask((SocketChannel)channel, contentIDs);
+                    }
+                    taskReceiving.setCallback(new ReceivingTask.Callback() {
+                        @Override
+                        public void onReceive(int resultID, MarkerGroup markerGroup) {
+                            markerManager.updateMarkers(markerGroup, resultID);
+                        }
+
+                        @Override
+                        public void onTimeout() {
+                            callback.onCloudTimeout();
+                        }
+                    });
+                    if(isCloudAnnotation) {
+                        taskAnnotation = new AnnotationTask(ip, port);
+                        taskAnnotation.setCallback(new AnnotationTask.Callback() {
+                            @Override
+                            public void onReceive(int markerID, String filePath) {
+                                callback.onAnnotationReceived(markerID, filePath);
+                                isAnnotationReceived = true;
+                                annotations.append(markerID, filePath);
+                            }
+                        });
+                        annotations = new SparseArray<>();
+                    }
                 }
             });
-            if(isCloudAnnotation) {
-                taskAnnotation = new AnnotationTask(ip, port);
-                taskAnnotation.setCallback(new AnnotationTask.Callback() {
-                    @Override
-                    public void onReceive(int markerID, String filePath) {
-                        callback.onAnnotationReceived(markerID, filePath);
-                        isAnnotationReceived = true;
-                        annotations.append(markerID, filePath);
-                    }
-                });
-                annotations = new SparseArray<>();
-            }
+            handlerNetwork.post(taskConnection);
         } else {
             taskMatching = new MatchingTaskSlow(context, contentIDs);
             taskMatching.setCallback(new MatchingTaskSlow.Callback() {
@@ -151,6 +140,7 @@ public class ARManager {
             handlerNetwork.post(taskMatching);
         }
 
+        markerManager = new MarkerImpl(handlerUtil);
         markerManager.setCallback(new MarkerImpl.Callback() {
             @Override
             public void onMarkersRecognized(MarkerGroup markerGroup) {
@@ -176,6 +166,8 @@ public class ARManager {
                 callback.onMarkersChanged(markerGroup);
             }
         });
+        taskFrame = new TrackingTask();
+        taskFrame.setCallback(markerManager);
     }
 
     public void stop() {
@@ -183,7 +175,7 @@ public class ARManager {
             @Override
             public void run() {
                 try {
-                    dataChannel.close();
+                    channel.close();
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -210,8 +202,8 @@ public class ARManager {
             offset = Constants.previewWidth - halfWidth * 2;
 
         if(isCloudBased) {
-            taskTransmission.setData(frameID, frameData, offset);
-            handlerNetwork.post(taskTransmission);
+            taskSending.setData(frameID, frameData, offset);
+            handlerNetwork.post(taskSending);
             taskReceiving.updateLatestSentID(frameID, offset);
         } else {
             taskMatching.setData(frameID, frameData, offset);
@@ -225,10 +217,6 @@ public class ARManager {
         handlerFrame.post(taskFrame);
 
         if(isCloudBased) handlerNetwork.post(taskReceiving);
-    }
-
-    public int frameSnapshot() {
-        return frameID;
     }
 
     private ARManager.Callback callback;

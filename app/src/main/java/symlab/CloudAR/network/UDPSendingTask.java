@@ -1,6 +1,5 @@
 package symlab.CloudAR.network;
 
-import android.os.Environment;
 import android.util.Log;
 
 import org.opencv.core.CvType;
@@ -10,9 +9,7 @@ import org.opencv.core.Rect;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -27,7 +24,7 @@ import static symlab.CloudAR.Constants.recoScale;
  * Created by st0rm23 on 2017/2/20.
  */
 
-public class TransmissionTask implements Runnable {
+public class UDPSendingTask implements SendingTask {
 
     private final int MESSAGE_META = 0;
     private final int IMAGE_DETECT = 2;
@@ -47,7 +44,7 @@ public class TransmissionTask implements Runnable {
     private Mat YUVMatTrans, YUVMatScaled, YUVCropped, GrayCropped;
     private int offset;
 
-    public TransmissionTask(DatagramChannel datagramChannel, SocketAddress serverAddress) {
+    public UDPSendingTask(DatagramChannel datagramChannel, SocketAddress serverAddress) {
         this.datagramChannel = datagramChannel;
         this.serverAddress = serverAddress;
 
@@ -56,7 +53,8 @@ public class TransmissionTask implements Runnable {
         GrayCropped = new Mat(Constants.previewHeight / Constants.recoScale, Constants.previewWidth / Constants.recoScale / Constants.cropScale, CvType.CV_8UC1);
     }
 
-    public void setData(int frmID, byte[] frameData, int offset){
+    @Override
+    public void setData(int frmID, byte[] frameData, int offset) {
         this.frmID = frmID;
         this.frameData = frameData;
         this.offset = offset / Constants.recoScale;
@@ -71,7 +69,7 @@ public class TransmissionTask implements Runnable {
             YUVMatTrans.put(0, 0, frameData);
 
             Imgproc.resize(YUVMatTrans, YUVMatScaled, YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-            Mat YUVCropped = new Mat(YUVMatScaled, new Rect(this.offset, 0, Constants.previewWidth / recoScale / cropScale, Constants.previewHeight / recoScale));
+            YUVCropped = new Mat(YUVMatScaled, new Rect(this.offset, 0, Constants.previewWidth / recoScale / cropScale, Constants.previewHeight / recoScale));
             Imgproc.cvtColor(YUVCropped, GrayCropped, Imgproc.COLOR_YUV420sp2GRAY);
         }
 
