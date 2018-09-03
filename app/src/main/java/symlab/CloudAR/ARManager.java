@@ -22,8 +22,10 @@ import symlab.CloudAR.network.ReceivingTask;
 import symlab.CloudAR.network.SendingTask;
 import symlab.CloudAR.network.TCPReceivingTask;
 import symlab.CloudAR.network.TCPSendingTask;
+import symlab.CloudAR.recognition.MatchingTask;
+import symlab.CloudAR.recognition.MatchingTaskSIFT;
 import symlab.CloudAR.track.MarkerImpl;
-import symlab.CloudAR.track.MatchingTaskSlow;
+import symlab.CloudAR.recognition.MatchingTaskNative;
 import symlab.CloudAR.track.TrackingTask;
 import symlab.CloudAR.network.UDPReceivingTask;
 import symlab.CloudAR.network.UDPSendingTask;
@@ -45,7 +47,7 @@ public class ARManager {
     private ConnectionTask taskConnection;
     private SendingTask taskSending;
     private ReceivingTask taskReceiving;
-    private MatchingTaskSlow taskMatching;
+    private MatchingTask taskMatching;
     private AnnotationTask taskAnnotation;
 
     private Channel channel;
@@ -54,6 +56,7 @@ public class ARManager {
     private boolean isCloudBased;
     private boolean isUDPBased = false;
     private boolean isCloudAnnotation = false;
+    private boolean isNativeMatching = true;
     private boolean isAnnotationReceived = true;
     private Set<Integer> contentIDs;
 
@@ -82,6 +85,7 @@ public class ARManager {
 
         System.loadLibrary("opencv_java");
         System.loadLibrary("nonfree");
+        System.loadLibrary("vlfeat");
 
         this.handlerUtil = createAndStartThread("util thread", Process.THREAD_PRIORITY_DEFAULT); //start util thread
         this.handlerFrame = createAndStartThread("frame thread" , -1); //start frame processing thread
@@ -130,14 +134,15 @@ public class ARManager {
             });
             handlerNetwork.post(taskConnection);
         } else {
-            taskMatching = new MatchingTaskSlow(context, contentIDs);
-            taskMatching.setCallback(new MatchingTaskSlow.Callback() {
+            if (isNativeMatching) taskMatching = new MatchingTaskNative(context, contentIDs);
+            else                  taskMatching = new MatchingTaskSIFT(context, contentIDs);
+            taskMatching.setCallback(new MatchingTask.Callback() {
                 @Override
                 public void onFinish(MarkerGroup markerGroup, int frameID) {
                     markerManager.updateMarkers(markerGroup, frameID);
                 }
             });
-            handlerNetwork.post(taskMatching);
+            handlerNetwork.post(taskMatching);  //initialization
         }
 
         markerManager = new MarkerImpl(handlerUtil);
