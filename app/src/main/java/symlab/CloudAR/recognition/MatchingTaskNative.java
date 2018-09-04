@@ -66,7 +66,6 @@ public class MatchingTaskNative implements MatchingTask{
     private Mat GrayCropped = new Mat(previewHeight / recoScale, previewWidth / recoScale / cropScale, CvType.CV_8UC1);
 
     private int recoTrackRatio = Constants.scale / Constants.recoScale;
-    private boolean train = false;
 
     public MatchingTaskNative(Context context, Set<Integer> contentIDs) {
         this.context = context;
@@ -119,8 +118,8 @@ public class MatchingTaskNative implements MatchingTask{
                 vl.addImage(localDescriptor.nativeObj);
             }
 
-            if(train) vl.trainGMM(Environment.getExternalStorageDirectory().getPath());
-            else      vl.loadGMM(Environment.getExternalStorageDirectory().getPath());
+            vl.trainPCA();
+            vl.trainGMM(Environment.getExternalStorageDirectory().getPath());
             vl.FVEncodeDatabase();
         } else {
             ts = System.currentTimeMillis();
@@ -137,9 +136,7 @@ public class MatchingTaskNative implements MatchingTask{
             detector.detect(GrayCropped, points);
             descriptorExtractor.compute(GrayCropped, points, descriptors);
 
-            Log.d(TAG, "before match " + System.currentTimeMillis());
             int best_index = vl.match(descriptors.nativeObj);
-            Log.d(TAG, "after match " + System.currentTimeMillis());
 
             MatOfDMatch matches = new MatOfDMatch();
             matcher.match(descriptors, localDescriptors.get(best_index), matches);

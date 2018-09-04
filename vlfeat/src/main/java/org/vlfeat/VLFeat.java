@@ -8,6 +8,7 @@ public class VLFeat {
     public VLFeat() {}
     public native String version();
     public native void addImage(long descriptors);
+    public native void trainPCA();
     public native void trainGMM(String path);
     public native void loadGMM(String path);
     public native void FVEncodeDatabase();
