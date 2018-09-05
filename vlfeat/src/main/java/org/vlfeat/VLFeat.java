@@ -12,5 +12,5 @@ public class VLFeat {
     public native void trainGMM(String path);
     public native void loadGMM(String path);
     public native void FVEncodeDatabase();
-    public native int match(long descriptors);
+    public native int[] match(long descriptors);
 }

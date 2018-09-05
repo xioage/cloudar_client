@@ -54,8 +54,6 @@ public class MatchingTaskNative implements MatchingTask{
     private int offset;
 
     private List<Mat> images;
-    private List<MatOfKeyPoint> localKeypoints;
-    private List<Mat> localDescriptors;
 
     private FeatureDetector detector;
     private DescriptorExtractor descriptorExtractor;
@@ -92,13 +90,18 @@ public class MatchingTaskNative implements MatchingTask{
             Log.d(Eval, "local extraction start: " + ts.toString());
 
             images = new LinkedList<>();
-            localKeypoints = new LinkedList<>();
-            localDescriptors = new LinkedList<>();
 
             try {
                 images.add(Utils.loadResource(context, R.drawable.aquaman));
                 images.add(Utils.loadResource(context, R.drawable.fantastic));
                 images.add(Utils.loadResource(context, R.drawable.smallfoot));
+                images.add(Utils.loadResource(context, R.drawable.bvs_poster));
+                images.add(Utils.loadResource(context, R.drawable.london_poster));
+                images.add(Utils.loadResource(context, R.drawable.mjd_poster));
+                images.add(Utils.loadResource(context, R.drawable.tfos_poster));
+                images.add(Utils.loadResource(context, R.drawable.tig_poster));
+                images.add(Utils.loadResource(context, R.drawable.avengers));
+                images.add(Utils.loadResource(context, R.drawable.ready));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -112,9 +115,7 @@ public class MatchingTaskNative implements MatchingTask{
                 Imgproc.cvtColor(image, image, Imgproc.COLOR_RGB2GRAY);
 
                 detector.detect(image, localKeypoint);
-                localKeypoints.add(localKeypoint);
                 descriptorExtractor.compute(image, localKeypoint, localDescriptor);
-                localDescriptors.add(localDescriptor);
                 vl.addImage(localDescriptor.nativeObj);
             }
 
@@ -136,26 +137,44 @@ public class MatchingTaskNative implements MatchingTask{
             detector.detect(GrayCropped, points);
             descriptorExtractor.compute(GrayCropped, points, descriptors);
 
-            int best_index = vl.match(descriptors.nativeObj);
+            int[] good_indexes = vl.match(descriptors.nativeObj);
+            Log.d(TAG, "indexes " + good_indexes[0] + " " + good_indexes[1]);
 
-            MatOfDMatch matches = new MatOfDMatch();
-            matcher.match(descriptors, localDescriptors.get(best_index), matches);
-            LinkedList<DMatch> matchesList = new LinkedList<>(matches.toList());
+            int best_index = 0;
+            MatOfKeyPoint best_keypoint = new MatOfKeyPoint();
             LinkedList<DMatch> best_matches = new LinkedList<>();
+            for(int n = 0; n < good_indexes.length; n++) {
+                MatOfKeyPoint localKeypoint = new MatOfKeyPoint();
+                Mat localDescriptor = new Mat();
 
-            for (int i = 0; i < descriptors.rows(); i++) {
-                if (matchesList.get(i).distance < 150) {
-                    best_matches.addLast(matchesList.get(i));
+                detector.detect(images.get(good_indexes[n]), localKeypoint);
+                descriptorExtractor.compute(images.get(good_indexes[n]), localKeypoint, localDescriptor);
+
+                MatOfDMatch matches = new MatOfDMatch();
+                matcher.match(descriptors, localDescriptor, matches);
+                LinkedList<DMatch> matchesList = new LinkedList<>(matches.toList());
+                LinkedList<DMatch> good_matches = new LinkedList<>();
+
+                for (int i = 0; i < descriptors.rows(); i++) {
+                    if (matchesList.get(i).distance < 150) {
+                        good_matches.addLast(matchesList.get(i));
+                    }
+                }
+                Log.d(Constants.TAG, "good matches:" + good_matches.size());
+
+                if(good_matches.size() > best_matches.size()) {
+                    best_keypoint = localKeypoint;
+                    best_matches = good_matches;
+                    best_index = good_indexes[n];
                 }
             }
-            Log.d(Constants.TAG, "good matches:" + best_matches.size());
 
             MarkerGroup markerGroup = new MarkerGroup();
             if (best_matches.size() >= 15) {
                 LinkedList<Point> objList = new LinkedList<>();
                 LinkedList<Point> sceneList = new LinkedList<>();
                 for (int i = 0; i < best_matches.size(); i++) {
-                    objList.addLast(localKeypoints.get(best_index).toList().get(best_matches.get(i).trainIdx).pt);
+                    objList.addLast(best_keypoint.toList().get(best_matches.get(i).trainIdx).pt);
                     sceneList.addLast(points.toList().get(best_matches.get(i).queryIdx).pt);
                 }
 

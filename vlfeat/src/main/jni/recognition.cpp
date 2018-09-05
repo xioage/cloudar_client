@@ -12,10 +12,11 @@
 #include <android/log.h>
 
 #define LOG_TAG "VLEncoding"
+#define NN 2
 
 extern "C" {
 int numClusters = 32;
-int dimension = 64;
+int dimension = 60;
 float *means, *covariances, *priors;
 
 std::vector<cv::Mat> descVector;
@@ -29,7 +30,8 @@ JNIEXPORT jstring JNICALL Java_org_vlfeat_VLFeat_version(JNIEnv *env, jobject in
 }
 
 JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_addImage(JNIEnv *env, jobject instance, jlong descriptors) {
-    cv::Mat desc(*((cv::Mat *) descriptors));
+    cv::Mat descriptor(*((cv::Mat *) descriptors));
+    cv::Mat desc = descriptor.rowRange(0, 300);
     descVector.push_back(desc);
     descMat.push_back(desc);
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "desc added: %d", desc.rows);
@@ -52,6 +54,7 @@ JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_trainPCA(JNIEnv *env, jobject inst
 }
 
 JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_trainGMM(JNIEnv *env, jobject instance, jstring path) {
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "GMM training with %d descs", descMatPCA.rows);
     float *trainData = (float *) vl_malloc(sizeof(float) * dimension * descMat.rows);
     for (int i = 0; i < descMat.rows; i++) {
         //memcpy(trainData+i*dimension*sizeof(float), descMat.ptr<float>(i), dimension*sizeof(float));
@@ -156,7 +159,24 @@ double norm(float *a, float *b, int l) {
     return res;
 }
 
-JNIEXPORT jint JNICALL Java_org_vlfeat_VLFeat_match(JNIEnv *env, jobject instance, jlong descriptors) {
+void sort(double *values, int *indexes, double value, int index, int k) {
+    for(int i = k-1; i >= 0; i--) {
+        if(value > values[i]) {
+            if(i < k-1) {
+                values[i+1] = value;
+                indexes[i+1] = index;
+            }
+            break;
+        } else {
+            if(i == 0) {
+                values[0] = value;
+                indexes[0] = index;
+            }
+        }
+    }
+}
+
+JNIEXPORT jintArray JNICALL Java_org_vlfeat_VLFeat_match(JNIEnv *env, jobject instance, jlong descriptors) {
     cv::Mat desc(*((cv::Mat *) descriptors));
     cv::Mat descPCA = pca.project(desc);
 
@@ -167,22 +187,23 @@ JNIEXPORT jint JNICALL Java_org_vlfeat_VLFeat_match(JNIEnv *env, jobject instanc
                      descPCA.ptr<float>(0), descPCA.rows,
                      VL_FISHER_FLAG_IMPROVED);
 
-    double minDistance;
-    int n = 0;
+    double distances[NN];
+    int indexes[NN] = {0};
     for (int i = 0; i < encs.size(); i++) {
         double distance = norm(enc, encs[i], 2 * dimension * numClusters);
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "distance: %f", distance);
+        //__android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "distance: %f", distance);
         if(i == 0) {
-            minDistance = distance;
-        } else if (distance < minDistance) {
-            n = i;
-            minDistance = distance;
+            for (int j = 0; j < NN; j++)
+                distances[j] = distance;
         }
+
+        sort(distances, indexes, distance, i, NN);
     }
 
     free(enc);
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "best index: %d", n);
 
-    return n;
+    jintArray result = env->NewIntArray(NN);
+    env->SetIntArrayRegion(result, 0, NN, indexes);
+    return result;
 }
 }
