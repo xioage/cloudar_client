@@ -3,9 +3,12 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/cloudridar_movieapp_client.iml" filepath="$PROJECT_DIR$/cloudridar_movieapp_client.iml" />
+      <module fileurl="file://$PROJECT_DIR$/cloudar/cloudar.iml" filepath="$PROJECT_DIR$/cloudar/cloudar.iml" />
+      <module fileurl="file://$PROJECT_DIR$/cloudridar_movieapp_client.git.iml" filepath="$PROJECT_DIR$/cloudridar_movieapp_client.git.iml" />
       <module fileurl="file://$PROJECT_DIR$/opencv/opencv.iml" filepath="$PROJECT_DIR$/opencv/opencv.iml" />
+      <module fileurl="file://$PROJECT_DIR$/poster/poster.iml" filepath="$PROJECT_DIR$/poster/poster.iml" />
       <module fileurl="file://$PROJECT_DIR$/rajawali/rajawali.iml" filepath="$PROJECT_DIR$/rajawali/rajawali.iml" />
+      <module fileurl="file://$PROJECT_DIR$/sear/sear.iml" filepath="$PROJECT_DIR$/sear/sear.iml" />
       <module fileurl="file://$PROJECT_DIR$/vlfeat/vlfeat.iml" filepath="$PROJECT_DIR$/vlfeat/vlfeat.iml" />
     </modules>
   </component>

@@ -9,9 +9,11 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/cloudar" />
             <option value="$PROJECT_DIR$/opencv" />
+            <option value="$PROJECT_DIR$/poster" />
             <option value="$PROJECT_DIR$/rajawali" />
+            <option value="$PROJECT_DIR$/sear" />
             <option value="$PROJECT_DIR$/vlfeat" />
           </set>
         </option>

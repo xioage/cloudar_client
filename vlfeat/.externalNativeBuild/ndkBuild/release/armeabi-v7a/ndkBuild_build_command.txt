@@ -1,14 +1,14 @@
-Executable : C:\Users\forev\AppData\Local\Android\Sdk\ndk-bundle\ndk-build.cmd
+Executable : C:\Users\wzhangal\AppData\Local\Android\sdk\ndk-bundle\ndk-build.cmd
 arguments : 
 NDK_PROJECT_PATH=null
-APP_BUILD_SCRIPT=C:\Users\forev\Downloads\project\cloudridar_movieapp_client\vlfeat\src\main\jni\Android.mk
-NDK_APPLICATION_MK=C:\Users\forev\Downloads\project\cloudridar_movieapp_client\vlfeat\src\main\jni\Application.mk
+APP_BUILD_SCRIPT=D:\sdk_project\cloudridar_movieapp_client.git\vlfeat\src\main\jni\Android.mk
+NDK_APPLICATION_MK=D:\sdk_project\cloudridar_movieapp_client.git\vlfeat\src\main\jni\Application.mk
 APP_ABI=armeabi-v7a
 NDK_ALL_ABIS=armeabi-v7a
 NDK_DEBUG=0
 APP_PLATFORM=android-19
-NDK_OUT=C:/Users/forev/Downloads/project/cloudridar_movieapp_client/vlfeat/build/intermediates/ndkBuild/release/obj
-NDK_LIBS_OUT=C:\Users\forev\Downloads\project\cloudridar_movieapp_client\vlfeat\build\intermediates\ndkBuild\release\lib
+NDK_OUT=D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/build/intermediates/ndkBuild/release/obj
+NDK_LIBS_OUT=D:\sdk_project\cloudridar_movieapp_client.git\vlfeat\build\intermediates\ndkBuild\release\lib
 APP_SHORT_COMMANDS=false
 LOCAL_SHORT_COMMANDS=false
 -B

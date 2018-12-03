@@ -1,4 +1,6 @@
-include ':app'
+include ':poster'
+include ':sear'
+include ':cloudar'
 include ':opencv'
 include ':rajawali'
 include ':vlfeat'

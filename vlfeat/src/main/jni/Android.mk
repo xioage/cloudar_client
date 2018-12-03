@@ -3,7 +3,7 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
 #opencv
-OPENCVROOT:= C:\Users\forev\Downloads\project\OpenCV-2.4.10-android-sdk
+OPENCVROOT:= D:\sdk_project\OpenCV-2.4.10-android-sdk
 OPENCV_CAMERA_MODULES:=on
 OPENCV_INSTALL_MODULES:=on
 OPENCV_LIB_TYPE:=SHARED

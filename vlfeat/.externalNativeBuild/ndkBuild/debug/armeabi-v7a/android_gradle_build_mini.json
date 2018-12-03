@@ -1,17 +1,17 @@
 {
   "buildFiles": [
-    "C:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\src\\main\\jni\\Android.mk",
-    "C:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\src\\main\\jni\\Application.mk"
+    "D:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\src\\main\\jni\\Android.mk",
+    "D:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\src\\main\\jni\\Application.mk"
   ],
   "cleanCommands": [
-    "C:\\Users\\forev\\AppData\\Local\\Android\\Sdk\\ndk-bundle\\ndk-build.cmd NDK_PROJECT_PATH\u003dnull APP_BUILD_SCRIPT\u003dC:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\src\\main\\jni\\Android.mk NDK_APPLICATION_MK\u003dC:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\src\\main\\jni\\Application.mk APP_ABI\u003darmeabi-v7a NDK_ALL_ABIS\u003darmeabi-v7a NDK_DEBUG\u003d1 APP_PLATFORM\u003dandroid-19 NDK_OUT\u003dC:/Users/forev/Downloads/project/cloudridar_movieapp_client/vlfeat/build/intermediates/ndkBuild/debug/obj NDK_LIBS_OUT\u003dC:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\build\\intermediates\\ndkBuild\\debug\\lib clean"
+    "C:\\Users\\wzhangal\\AppData\\Local\\Android\\sdk\\ndk-bundle\\ndk-build.cmd NDK_PROJECT_PATH\u003dnull APP_BUILD_SCRIPT\u003dD:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\src\\main\\jni\\Android.mk NDK_APPLICATION_MK\u003dD:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\src\\main\\jni\\Application.mk APP_ABI\u003darmeabi-v7a NDK_ALL_ABIS\u003darmeabi-v7a NDK_DEBUG\u003d1 APP_PLATFORM\u003dandroid-19 NDK_OUT\u003dD:/sdk_project/cloudridar_movieapp_client.git/vlfeat/build/intermediates/ndkBuild/debug/obj NDK_LIBS_OUT\u003dD:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\build\\intermediates\\ndkBuild\\debug\\lib clean"
   ],
   "libraries": {
     "vlfeat-debug-armeabi-v7a": {
       "artifactName": "vlfeat",
-      "buildCommand": "C:\\Users\\forev\\AppData\\Local\\Android\\Sdk\\ndk-bundle\\ndk-build.cmd NDK_PROJECT_PATH\u003dnull APP_BUILD_SCRIPT\u003dC:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\src\\main\\jni\\Android.mk NDK_APPLICATION_MK\u003dC:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\src\\main\\jni\\Application.mk APP_ABI\u003darmeabi-v7a NDK_ALL_ABIS\u003darmeabi-v7a NDK_DEBUG\u003d1 APP_PLATFORM\u003dandroid-19 NDK_OUT\u003dC:/Users/forev/Downloads/project/cloudridar_movieapp_client/vlfeat/build/intermediates/ndkBuild/debug/obj NDK_LIBS_OUT\u003dC:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\build\\intermediates\\ndkBuild\\debug\\lib C:/Users/forev/Downloads/project/cloudridar_movieapp_client/vlfeat/build/intermediates/ndkBuild/debug/obj/local/armeabi-v7a/libvlfeat.so",
+      "buildCommand": "C:\\Users\\wzhangal\\AppData\\Local\\Android\\sdk\\ndk-bundle\\ndk-build.cmd NDK_PROJECT_PATH\u003dnull APP_BUILD_SCRIPT\u003dD:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\src\\main\\jni\\Android.mk NDK_APPLICATION_MK\u003dD:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\src\\main\\jni\\Application.mk APP_ABI\u003darmeabi-v7a NDK_ALL_ABIS\u003darmeabi-v7a NDK_DEBUG\u003d1 APP_PLATFORM\u003dandroid-19 NDK_OUT\u003dD:/sdk_project/cloudridar_movieapp_client.git/vlfeat/build/intermediates/ndkBuild/debug/obj NDK_LIBS_OUT\u003dD:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\build\\intermediates\\ndkBuild\\debug\\lib D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/build/intermediates/ndkBuild/debug/obj/local/armeabi-v7a/libvlfeat.so",
       "abi": "armeabi-v7a",
-      "output": "C:\\Users\\forev\\Downloads\\project\\cloudridar_movieapp_client\\vlfeat\\build\\intermediates\\ndkBuild\\debug\\obj\\local\\armeabi-v7a\\libvlfeat.so"
+      "output": "D:\\sdk_project\\cloudridar_movieapp_client.git\\vlfeat\\build\\intermediates\\ndkBuild\\debug\\obj\\local\\armeabi-v7a\\libvlfeat.so"
     }
   }
 }
