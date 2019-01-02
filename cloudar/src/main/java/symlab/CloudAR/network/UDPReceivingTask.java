@@ -79,9 +79,8 @@ public class UDPReceivingTask implements ReceivingTask {
             newMarkerNum = ByteBuffer.wrap(tmp).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
             if (resultID <= 5) {
-                Log.d(Constants.Eval, "metadata " + resultID + " received ");
+                Log.d(Constants.TAG, "metadata " + resultID + " received ");
             } else if (resultID == lastSentID) {
-                Log.d(Constants.Eval, "" + newMarkerNum + " res " + resultID + " received ");
                 MarkerGroup markerGroup = new MarkerGroup();
 
                 for (int i = 0; i < newMarkerNum; i++) {
@@ -109,10 +108,11 @@ public class UDPReceivingTask implements ReceivingTask {
                     //String Name = markerName.substring(0, markerName.indexOf("."));
 
                     if(contentIDs == null || contentIDs.contains(ID))
-                        markerGroup.addMarker(new Marker(ID, Name, new Size(width/100.0, height/100.0), Rec));
+                        markerGroup.addMarker(new Marker(ID, Name, new Size(width, height), Rec));
                 }
 
                 if (callback != null){
+                    Log.d(Constants.Eval, "" + newMarkerNum + " res received at " + System.currentTimeMillis());
                     callback.onReceive(resultID, markerGroup);
                     this.timeoutCounter = Constants.TIMEOUT + 1;
                 }

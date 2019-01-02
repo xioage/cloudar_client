@@ -69,7 +69,7 @@ public class TCPSendingTask implements SendingTask {
             YUVMatTrans.put(0, 0, frameData);
 
             Imgproc.resize(YUVMatTrans, YUVMatScaled, YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-            YUVCropped = new Mat(YUVMatScaled, new Rect(this.offset, 0, Constants.previewWidth / recoScale / cropScale, Constants.previewHeight / recoScale));
+            YUVCropped = new Mat(YUVMatScaled, new Rect(this.offset, 0, Constants.previewWidth / recoScale / cropScale, (Constants.previewHeight + Constants.previewHeight / 2) / recoScale));
             Imgproc.cvtColor(YUVCropped, GrayCropped, Imgproc.COLOR_YUV420sp2GRAY);
         }
 

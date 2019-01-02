@@ -1,9 +1,11 @@
 package symlab.CloudAR.peer;
 
 public interface PeerTask {
-    int peerImage = 0;
-    int peerBoundary = 1;
-    int peerStatus = 2;
+    int peerEchoRequest = 0;
+    int peerEchoResponse = 1;
+    int peerImage = 2;
+    int peerBoundary = 3;
+    int peerStatus = 4;
 
     void start();
     void setAnnotationStatus(byte[] status);

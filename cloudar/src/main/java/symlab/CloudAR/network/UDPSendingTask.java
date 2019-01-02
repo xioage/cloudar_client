@@ -5,7 +5,6 @@ import android.util.Log;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
-import org.opencv.core.Rect;
 import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 
@@ -16,9 +15,6 @@ import java.nio.ByteOrder;
 import java.nio.channels.DatagramChannel;
 
 import symlab.CloudAR.definition.Constants;
-
-import static symlab.CloudAR.definition.Constants.cropScale;
-import static symlab.CloudAR.definition.Constants.recoScale;
 
 /**
  * Created by st0rm23 on 2017/2/20.
@@ -69,8 +65,10 @@ public class UDPSendingTask implements SendingTask {
             YUVMatTrans.put(0, 0, frameData);
 
             Imgproc.resize(YUVMatTrans, YUVMatScaled, YUVMatScaled.size(), 0, 0, Imgproc.INTER_LINEAR);
-            YUVCropped = new Mat(YUVMatScaled, new Rect(this.offset, 0, Constants.previewWidth / recoScale / cropScale, Constants.previewHeight / recoScale));
-            Imgproc.cvtColor(YUVCropped, GrayCropped, Imgproc.COLOR_YUV420sp2GRAY);
+            //YUVCropped = new Mat(YUVMatScaled, new Rect(this.offset, 0, Constants.previewWidth / recoScale / cropScale, (Constants.previewHeight + Constants.previewHeight / 2) / recoScale));
+            //Imgproc.cvtColor(YUVCropped, GrayCropped, Imgproc.COLOR_YUV420sp2GRAY);
+            Imgproc.cvtColor(YUVMatScaled, GrayCropped, Imgproc.COLOR_YUV420sp2GRAY);
+            Log.d(Constants.Eval, "get gray scaled frame data at " + System.currentTimeMillis());
         }
 
         if (dataType == IMAGE_DETECT) {
@@ -104,7 +102,7 @@ public class UDPSendingTask implements SendingTask {
             if (dataType == MESSAGE_META)
                 Log.d(Constants.Eval, "metadata " + frmID + " sent ");
             else
-                Log.d(Constants.Eval, "frame " + frmID + " sent ");
+                Log.d(Constants.Eval, "frame " + frmID + " sent with size " + datasize + " at " + System.currentTimeMillis());
         } catch (IOException e) {
             e.printStackTrace();
         }

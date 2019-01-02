@@ -109,7 +109,7 @@ public class TCPReceivingTask implements ReceivingTask{
                     //String Name = markerName.substring(0, markerName.indexOf("."));
 
                     if(contentIDs == null || contentIDs.contains(ID))
-                        markerGroup.addMarker(new Marker(ID, Name, new Size(width/100.0, height/100.0), Rec));
+                        markerGroup.addMarker(new Marker(ID, Name, new Size(width/2, height/2), Rec));
                 }
 
                 if (callback != null){

@@ -27,7 +27,7 @@ public class PosterScene extends ARScene {
         VideoPlayer videoPlayer4 = new VideoPlayer(R.raw.smallfoot);
         bind(2, videoPlayer4);
 
-        addLight(new float[]{0, 0, 10, 0, 0, 0, 1});
+        addLight(new float[]{0, 0, 1, 0, 0, 0, 1});
         addInteraction(clicking);
     }
 }

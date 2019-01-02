@@ -14,6 +14,7 @@ LOCAL_CFLAGS := -DVL_DISABLE_SSE2 -DVL_DISABLE_AVX
 
 FILE_LIST := $(wildcard $(LOCAL_PATH)/vl/*.c)
 LOCAL_SRC_FILES := recognition.cpp
+LOCAL_SRC_FILES += em.c
 LOCAL_SRC_FILES += $(FILE_LIST)
 LOCAL_LDLIBS += -llog -lm
 LOCAL_MODULE := vlfeat

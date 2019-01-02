@@ -20,7 +20,9 @@ D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/build/intermediates/ndkBuil
   D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/kmeans.h \
   D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/mathop.h \
   D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/kdtree.h \
-  D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/fisher.h
+  D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/fisher.h \
+  D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/vlad.h \
+  D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni/em.h
 
 C:/Users/wzhangal/AppData/Local/Android/sdk/ndk-bundle/build//../sources/cxx-stl/gnu-libstdc++/4.9/include\vector:
 
@@ -63,3 +65,7 @@ D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/mathop.h:
 D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/kdtree.h:
 
 D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/fisher.h:
+
+D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni\vl/vlad.h:
+
+D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni/em.h:

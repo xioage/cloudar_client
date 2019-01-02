@@ -26,8 +26,8 @@ import symlab.CloudAR.network.TCPSendingTask;
 import symlab.CloudAR.network.UDPReceivingTask;
 import symlab.CloudAR.network.UDPSendingTask;
 import symlab.CloudAR.recognition.MatchingTask;
-import symlab.CloudAR.recognition.MatchingTaskNative;
-import symlab.CloudAR.recognition.MatchingTaskSIFT;
+import symlab.CloudAR.recognition.MatchingTaskRetrieval;
+import symlab.CloudAR.recognition.MatchingTaskSimple;
 import symlab.CloudAR.track.MarkerImpl;
 import symlab.CloudAR.track.TrackingTask;
 
@@ -54,7 +54,7 @@ public class ARManager {
     boolean isCloudBased;
     boolean isCloudAnnotation;
     boolean isNativeMatching;
-    boolean isUDPBased = false;
+    boolean isUDPBased;
     boolean isAnnotationReceived = true;
     Set<Integer> contentIDs;
 
@@ -69,11 +69,12 @@ public class ARManager {
         return new Handler(handlerThread.getLooper());
     }
 
-    public void init(Context context, boolean isCloudBased, boolean isCloudAnnotation, boolean isNativeMatching, Set<Integer> contentIDs){
+    public void init(Context context, boolean isCloudBased, boolean isUDPBased, boolean isCloudAnnotation, boolean isNativeMatching, Set<Integer> contentIDs){
         this.context = context;
+        this.isCloudBased = isCloudBased;
+        this.isUDPBased = isUDPBased;
         this.isCloudAnnotation = isCloudAnnotation;
         this.isNativeMatching = isNativeMatching;
-        this.isCloudBased = isCloudBased;
         this.contentIDs = contentIDs;
 
         System.loadLibrary("opencv_java");
@@ -127,8 +128,8 @@ public class ARManager {
             });
             handlerNetwork.post(taskConnection);
         } else {
-            if (isNativeMatching) taskMatching = new MatchingTaskNative(context, contentIDs);
-            else                  taskMatching = new MatchingTaskSIFT(context, contentIDs);
+            if (isNativeMatching) taskMatching = new MatchingTaskRetrieval(context, contentIDs, MatchingTask.orb);
+            else                  taskMatching = new MatchingTaskSimple(context, contentIDs, MatchingTask.sift);
             taskMatching.setCallback(new MatchingTask.Callback() {
                 @Override
                 public void onFinish(MarkerGroup markerGroup, int frameID) {

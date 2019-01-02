@@ -77,10 +77,11 @@ public class SearActivity extends Activity {
         scaleGestureDetector = new ScaleGestureDetector(this, new ScaleListener());
 
         mManager = new ARManagerMultipleUser();
-        mManager.init(this, false, false, false, mScene.getContentIDs());
+        mManager.init(this, true, true, false, false, mScene.getContentIDs());
         mManager.setCallback(new ARManager.Callback() {
             @Override
             public void onMarkersReady(MarkerGroup markerGroup) {
+                Log.d(Constants.Eval, "recognition showed at " + System.currentTimeMillis());
                 mRenderer.updateContents(markerGroup);
                 somethingRecognized = markerGroup.size() > 0;
             }
@@ -165,6 +166,7 @@ public class SearActivity extends Activity {
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
+        Log.d(Constants.TAG, "touch at " + System.currentTimeMillis());
         scaleGestureDetector.onTouchEvent(ev);
         if(ev.getPointerCount() > 1) {
             mManager.shareAnnotationStatus(mRenderer.serializeStatus());
@@ -178,6 +180,7 @@ public class SearActivity extends Activity {
                 draggingCount = 100;
                 mLastX = MotionEventCompat.getX(ev, 0);
                 mLastY = MotionEventCompat.getY(ev, 0);
+                mRenderer.getObjectAt(mLastX, mLastY);
                 break;
             case MotionEvent.ACTION_MOVE:
                 draggingCount++;

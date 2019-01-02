@@ -10,7 +10,7 @@ import symlab.CloudAR.peer.WiFiDirectTask;
 
 public class ARManagerMultipleUser extends ARManager {
     private PeerTask taskPeer;
-    private boolean isServer;
+    private boolean enablePeer = false;
 
     public ARManagerMultipleUser() {
         super();
@@ -24,11 +24,12 @@ public class ARManagerMultipleUser extends ARManager {
         taskPeer.setCallback(new PeerTask.Callback() {
             @Override
             public void onPeerDiscoveryFinished(boolean peerFound) {
-                if(false) {
-                    isServer = false;
+                if(peerFound) {
+                    Log.d(Constants.TAG, "working as client");
+                    //isServer = false;
                 } else {
                     Log.d(Constants.TAG, "working as server");
-                    isServer = true;
+                    //isServer = true;
                 }
             }
 
@@ -60,7 +61,7 @@ public class ARManagerMultipleUser extends ARManager {
 
     @Override
     public void driveFrame(byte[] frameData) {
-        if(++frameID == 5) {
+        if(frameID == 10) {
             recognize(frameData, Constants.previewWidth / 2, Constants.previewHeight / 2);
             return;
         }

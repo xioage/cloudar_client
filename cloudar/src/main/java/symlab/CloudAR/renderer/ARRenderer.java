@@ -37,14 +37,13 @@ public class ARRenderer extends Renderer implements OnObjectPickedListener {
         this.mPicker = new ObjectColorPicker(this);
         this.mPicker.setOnObjectPickedListener(this);
 
-        for(float[] light : mScene.getLights()) {
-            DirectionalLight directionalLight = new DirectionalLight();
-            directionalLight.setPosition(light[0], light[1], light[2]);
-            directionalLight.setLookAt(light[3], light[4], light[5]);
-            directionalLight.setPower(light[6]);
-            directionalLight.enableLookAt();
-            getCurrentScene().addLight(directionalLight);
-        }
+        float[] light = mScene.getLights().get(0);
+        DirectionalLight directionalLight = new DirectionalLight();
+        directionalLight.setPosition(light[0], light[1], light[2]);
+        directionalLight.setLookAt(light[3], light[4], light[5]);
+        directionalLight.setPower(light[6]);
+        directionalLight.enableLookAt();
+        getCurrentScene().addLight(directionalLight);
 
         ARCamera mCamera = new ARCamera();
         getCurrentScene().replaceAndSwitchCamera(getCurrentCamera(), mCamera);

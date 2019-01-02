@@ -263,6 +263,10 @@ public class WiFiDirectTask implements PeerTask {
             //if(data != null) setOutputBuffer(data);
             //if(result != null) setOutputBuffer(result);
             //if(isServer) setOutputBuffer(new byte[5000000]);
+            if(isServer) {
+                sendTask.setOutputBuffer(new byte[12]);
+                handler.post(sendTask);
+            }
         }
 
         public void run() {
@@ -289,13 +293,31 @@ public class WiFiDirectTask implements PeerTask {
                                 System.arraycopy(buffer, startPoint + 4, tmp, 0, 4);
                                 dataType = ByteBuffer.wrap(tmp).order(ByteOrder.BIG_ENDIAN).getInt();
                                 System.arraycopy(buffer, startPoint + 8, tmp, 0, 4);
-                                if (dataType == peerBoundary) {
-                                    packetLength = 500;
-                                    markerNum = ByteBuffer.wrap(tmp).order(ByteOrder.BIG_ENDIAN).getInt();
-                                } else if (dataType == peerImage){
-                                    packetLength = ByteBuffer.wrap(tmp).order(ByteOrder.BIG_ENDIAN).getInt();
-                                } else {
-                                    packetLength = 16;
+                                switch(dataType) {
+                                    case peerEchoRequest:
+                                        packetLength = 0;
+                                        ByteBuffer bb = ByteBuffer.allocate(12);
+                                        bb.putInt(0);
+                                        bb.putInt(1);
+                                        bb.putInt(0);
+                                        sendTask.setOutputBuffer(bb.array());
+                                        handler.post(sendTask);
+                                        break;
+                                    case peerEchoResponse:
+                                        Log.d(TAG, "echo response: " + System.currentTimeMillis());
+                                        packetLength = 0;
+                                        break;
+                                    case peerImage:
+                                        packetLength = ByteBuffer.wrap(tmp).order(ByteOrder.BIG_ENDIAN).getInt();
+                                        break;
+                                    case peerBoundary:
+                                        packetLength = 500;
+                                        markerNum = ByteBuffer.wrap(tmp).order(ByteOrder.BIG_ENDIAN).getInt();
+                                        break;
+                                    case peerStatus:
+                                        Log.d(TAG, "received peer status at " + System.currentTimeMillis());
+                                        packetLength = 20;
+                                        break;
                                 }
 
                                 packet = new byte[packetLength];
@@ -313,7 +335,7 @@ public class WiFiDirectTask implements PeerTask {
                                 if (dataType == peerBoundary) {
                                     callback.onReceive(frameID, dataType, markerNum, packet);
                                     recoReceived = true;
-                                } else {
+                                } else if (dataType == peerImage || dataType == peerStatus){
                                     callback.onReceive(frameID, dataType, packetLength, packet);
                                 }
 
@@ -360,7 +382,7 @@ public class WiFiDirectTask implements PeerTask {
         public void run() {
             try {
                 outputStream.write(outputBuffer);
-                //Log.d(TAG, "data sent: " + outputBuffer.length);
+                Log.d(TAG, "data sent " + outputBuffer.length + " at " + System.currentTimeMillis());
             } catch (IOException e) {
                 e.printStackTrace();
             }
