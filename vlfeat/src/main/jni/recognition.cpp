@@ -17,9 +17,10 @@
 #define NN 1
 
 extern "C" {
-int numClusters = 32;
-int dimension = 60;
+int numClusters = 8;
+int dimension;
 float *means, *covariances, *priors;
+double *omega, *miu;
 
 std::vector<cv::Mat> descVector;
 cv::Mat descMat;
@@ -29,7 +30,6 @@ cv::PCA pca;
 
 double pi[K];
 double mu[K][D];
-double vector[10][16448];
 
 JNIEXPORT jstring JNICALL Java_org_vlfeat_VLFeat_version(JNIEnv *env, jobject instance) {
     return env->NewStringUTF(vl_get_version_string());
@@ -37,7 +37,9 @@ JNIEXPORT jstring JNICALL Java_org_vlfeat_VLFeat_version(JNIEnv *env, jobject in
 
 JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_addImage(JNIEnv *env, jobject instance, jlong descriptors) {
     cv::Mat descriptor(*((cv::Mat *) descriptors));
-    cv::Mat desc = descriptor.rowRange(0, 300);
+    cv::Mat desc;
+    if(descriptor.rows > 1000) desc = descriptor.rowRange(0, 1000);
+    else desc = descriptor;
     descVector.push_back(desc);
     descMat.push_back(desc);
     //__android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "desc added: %d", desc.rows);
@@ -87,6 +89,61 @@ JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_trainPCA(JNIEnv *env, jobject inst
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "PCA training finished");
 }
 
+JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_loadPCA(JNIEnv *env, jobject instance, jstring path, jint featureType) {
+    FILE *proFile, *procFile, *eigenFile;
+    float *pro, *proc, *eigen;
+    std::string proPath, proCenterPath, eigenPath;
+    std::string name[2][3] = {{"sift_pro_pca", "sift_proc_pca", "sift_eigen_pca"}, {"surf_pro_pca", "surf_proc_pca", "surf_eigen_pca"}};
+    int cols;
+
+    if (featureType == 0) {
+        dimension = 80;
+        cols = 128;
+    }
+    else {
+        dimension = 45;
+        cols = 64;
+    }
+
+    proPath = convertJString(env, path).append(name[featureType][0]);
+    proFile = fopen(proPath.c_str(), "rb");
+    pro = (float *) malloc(sizeof(float) * dimension * cols);
+    fread(pro, sizeof(float) * dimension * cols, 1, proFile);
+    fclose(proFile);
+    cv::Mat proMat(dimension, cols, CV_32FC1);
+    for(int i = 0; i < dimension; i++) {
+        for(int j = 0; j < cols; j++) {
+            proMat.at<float>(i,j) = pro[i*cols+j];
+        }
+    }
+
+    proCenterPath = convertJString(env, path).append(name[featureType][1]);
+    procFile = fopen(proCenterPath.c_str(), "rb");
+    proc = (float *) malloc(sizeof(float) * cols);
+    fread(proc, sizeof(float) * cols, 1, procFile);
+    fclose(procFile);
+    cv::Mat procMat(1, cols, CV_32FC1);
+    for(int i = 0; i < cols; i++) {
+        procMat.at<float>(0, i) = proc[i];
+    }
+
+    eigenPath = convertJString(env, path).append(name[featureType][1]);
+    eigenFile = fopen(eigenPath.c_str(), "rb");
+    eigen = (float *) malloc(sizeof(float) * dimension);
+    fread(eigen, sizeof(float) * dimension, 1, eigenFile);
+    fclose(eigenFile);
+    cv::Mat eigenMat(dimension, 1, CV_32FC1);
+    for(int i = 0; i < dimension; i++) {
+        eigenMat.at<float>(i, 0) = eigen[i];
+    }
+
+    pca = cv::PCA();
+    pca.eigenvalues = eigenMat;
+    pca.eigenvectors = proMat;
+    pca.mean = procMat;
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "PCA loading finished");
+}
+
 JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_trainGMM(JNIEnv *env, jobject instance) {
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "GMM training with %d descs", descMatPCA.rows);
     float *trainData = (float *) vl_malloc(sizeof(float) * dimension * descMat.rows);
@@ -116,6 +173,40 @@ JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_trainGMM(JNIEnv *env, jobject inst
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "GMM training finished");
 }
 
+JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_loadGMM(JNIEnv *env, jobject instance, jstring path, jint featureType, jboolean isPCAEnabled) {
+    FILE *meansFile, *covariancesFile, *priorsFile;
+    std::string meansPath, covariancesPath, priorsPath;
+    std::string name[2][3] = {{"sift_mean", "sift_cov", "sift_pri"}, {"surf_mean", "surf_cov", "surf_pri"}};
+
+    if(isPCAEnabled) {
+        if (featureType == 0) dimension = 80;
+        else dimension = 45;
+    } else {
+        if (featureType == 0) dimension = 128;
+        else dimension = 64;
+    }
+
+    meansPath = convertJString(env, path).append(name[featureType][0]);
+    meansFile = fopen(meansPath.c_str(), "rb");
+    means = (float *) malloc(sizeof(float) * dimension * numClusters);
+    fread(means, sizeof(float) * dimension * numClusters, 1, meansFile);
+    fclose(meansFile);
+
+    covariancesPath = convertJString(env, path).append(name[featureType][1]);
+    covariancesFile = fopen(covariancesPath.c_str(), "rb");
+    covariances = (float *) malloc(sizeof(float) * dimension * numClusters);
+    fread(covariances, sizeof(float) * dimension * numClusters, 1, covariancesFile);
+    fclose(covariancesFile);
+
+    priorsPath = convertJString(env, path).append(name[featureType][2]);
+    priorsFile = fopen(priorsPath.c_str(), "rb");
+    priors = (float *) malloc(sizeof(float) * numClusters);
+    fread(priors, sizeof(float) * numClusters, 1, priorsFile);
+    fclose(priorsFile);
+
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "GMM loading finished");
+}
+
 JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_FVEncodeDatabaseGMM(JNIEnv *env, jobject instance) {
     for (int i = 0; i < descVector.size(); i++) {
         float *enc = (float *) vl_malloc(sizeof(float) * 2 * dimension * numClusters);
@@ -135,8 +226,26 @@ JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_FVEncodeDatabaseGMM(JNIEnv *env, j
                          VL_FISHER_FLAG_IMPROVED);
 
         encs.push_back(enc);
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "image %d encoded", i);
 
         free(encData);
+    }
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "database encoded");
+}
+
+JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_FVEncodeDatabaseGMMNoPCA(JNIEnv *env, jobject instance) {
+    dimension = descVector[0].cols;
+
+    for (int i = 0; i < descVector.size(); i++) {
+        float *enc = (float *) vl_malloc(sizeof(float) * 2 * dimension * numClusters);
+        vl_fisher_encode(enc, VL_TYPE_FLOAT,
+                         means, dimension, numClusters,
+                         covariances, priors,
+                         descVector[i].ptr<float>(0), descVector[i].rows,
+                         VL_FISHER_FLAG_IMPROVED);
+
+        encs.push_back(enc);
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "image %d encoded", i);
     }
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "database encoded");
 }
@@ -150,6 +259,37 @@ JNIEXPORT jintArray JNICALL Java_org_vlfeat_VLFeat_matchGMM(JNIEnv *env, jobject
                      means, dimension, numClusters,
                      covariances, priors,
                      descPCA.ptr<float>(0), descPCA.rows,
+                     VL_FISHER_FLAG_IMPROVED);
+
+    double distances[NN];
+    int indexes[NN] = {0};
+    for (int i = 0; i < encs.size(); i++) {
+        double distance = norm(enc, encs[i], 2 * dimension * numClusters);
+        //__android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "distance: %f", distance);
+        if(i == 0) {
+            for (int j = 0; j < NN; j++)
+                distances[j] = distance;
+        }
+
+        sort(distances, indexes, distance, i, NN);
+    }
+
+    free(enc);
+
+    jintArray result = env->NewIntArray(NN);
+    env->SetIntArrayRegion(result, 0, NN, indexes);
+    return result;
+}
+
+JNIEXPORT jintArray JNICALL Java_org_vlfeat_VLFeat_matchGMMNoPCA(JNIEnv *env, jobject instance, jlong descriptors) {
+    cv::Mat desc(*((cv::Mat *) descriptors));
+    dimension = desc.cols;
+
+    float *enc = (float *) vl_malloc(sizeof(float) * 2 * dimension * numClusters);
+    vl_fisher_encode(enc, VL_TYPE_FLOAT,
+                     means, dimension, numClusters,
+                     covariances, priors,
+                     desc.ptr<float>(0), desc.rows,
                      VL_FISHER_FLAG_IMPROVED);
 
     double distances[NN];
@@ -206,32 +346,60 @@ JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_trainBMM(JNIEnv *env, jobject inst
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "training finished");
 }
 
+JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_loadBMM(JNIEnv *env, jobject instance, jstring path, jint featureType) {
+    FILE *omegaFile, *miuFile;
+    std::string omegaPath, miuPath;
+    std::string name[3][2] = {{"orb_omega", "orb_miu"}, {"freak_omega", "freak_miu"}, {"brisk_omega", "brisk_miu"}};
+
+    omegaPath = convertJString(env, path).append(name[featureType-2][0]);
+    omegaFile = fopen(omegaPath.c_str(), "rb");
+    omega = (double *) malloc(sizeof(double) * K);
+    fread(omega, sizeof(double) * K, 1, omegaFile);
+    fclose(omegaFile);
+
+    for (int i = 0; i < K; i++)
+        pi[i] = omega[i];
+
+    miuPath = convertJString(env, path).append(name[featureType-2][1]);
+    miuFile = fopen(miuPath.c_str(), "rb");
+    miu = (double *) malloc(sizeof(double) * K * D);
+    fread(miu, sizeof(double) * K * D, 1, miuFile);
+    fclose(miuFile);
+
+    for (int i = 0; i < K; i++)
+        for (int j = 0; j < D; j++)
+            mu[i][j] = miu[i * D + j];
+
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "BMM loading finished");
+}
+
 JNIEXPORT void JNICALL Java_org_vlfeat_VLFeat_FVEncodeDatabaseBMM(JNIEnv *env, jobject instance) {
     for(int i = 0; i < descVector.size(); i++) {
-        float enc[16448];
+        float *enc = (float *)malloc((D+1)*K * sizeof(float));
         FV(descVector[i].data, descVector[i].rows, pi, mu, enc);
         encs.push_back(enc);
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "image %d encoded", i);
     }
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "database encoded");
 }
 
 JNIEXPORT jintArray JNICALL Java_org_vlfeat_VLFeat_matchBMM(JNIEnv *env, jobject instance, jlong descriptors) {
     cv::Mat desc(*((cv::Mat *) descriptors));
-    float enc[16448];
+    float enc[(D+1)*K];
 
     FV(desc.data, desc.rows, pi, mu, enc);
     double distances[NN];
     int indexes[NN] = {0};
 
     for(int i = 0; i < encs.size(); i++) {
-        double distance = norm(enc, encs[i], 16448);
+        double distance = norm(enc, encs[i], (D+1)*K);
         if(i == 0) {
             for (int j = 0; j < NN; j++)
                 distances[j] = distance;
         }
 
         sort(distances, indexes, distance, i, NN);
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "distance: %lf", distance);
+        //__android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "distance: %lf", distance);
     }
 
     jintArray result = env->NewIntArray(NN);

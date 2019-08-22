@@ -20,47 +20,50 @@ public class ARManagerMultipleUser extends ARManager {
     public void start() {
         super.start();
 
-        taskPeer = new WiFiDirectTask(context, handlerNetwork);
-        taskPeer.setCallback(new PeerTask.Callback() {
-            @Override
-            public void onPeerDiscoveryFinished(boolean peerFound) {
-                if(peerFound) {
-                    Log.d(Constants.TAG, "working as client");
-                    //isServer = false;
-                } else {
-                    Log.d(Constants.TAG, "working as server");
-                    //isServer = true;
+        if(enablePeer) {
+            taskPeer = new WiFiDirectTask(context, handlerNetwork);
+            taskPeer.setCallback(new PeerTask.Callback() {
+                @Override
+                public void onPeerDiscoveryFinished(boolean peerFound) {
+                    if (peerFound) {
+                        Log.d(Constants.TAG, "working as client");
+                        //isServer = false;
+                    } else {
+                        Log.d(Constants.TAG, "working as server");
+                        //isServer = true;
+                    }
                 }
-            }
 
-            @Override
-            public void onReceive(int frameID, int dataType, int size, byte[] data) {
-                switch(dataType) {
-                    case PeerTask.peerStatus:
-                        //Log.d(Constants.TAG, "peer status received");
-                        ByteBuffer buffer = ByteBuffer.allocate(size);
-                        buffer.put(data);
-                        buffer.flip();
-                        float[] status = new float[size/4];
-                        for(int i = 0; i < size/4; i++)
-                            status[i] = buffer.getFloat();
-                        callback.onAnnotationStatusReceived(status);
-                        break;
+                @Override
+                public void onReceive(int frameID, int dataType, int size, byte[] data) {
+                    switch (dataType) {
+                        case PeerTask.peerStatus:
+                            //Log.d(Constants.TAG, "peer status received");
+                            ByteBuffer buffer = ByteBuffer.allocate(size);
+                            buffer.put(data);
+                            buffer.flip();
+                            float[] status = new float[size / 4];
+                            for (int i = 0; i < size / 4; i++)
+                                status[i] = buffer.getFloat();
+                            callback.onAnnotationStatusReceived(status);
+                            break;
+                    }
                 }
-            }
-        });
-        taskPeer.start();
+            });
+            taskPeer.start();
+        }
     }
 
     @Override
     public void stop() {
         super.stop();
 
-        taskPeer.stop();
+        if(enablePeer) taskPeer.stop();
     }
 
     @Override
     public void driveFrame(byte[] frameData) {
+        if(true) return;
         if(frameID == 10) {
             recognize(frameData, Constants.previewWidth / 2, Constants.previewHeight / 2);
             return;
@@ -81,6 +84,6 @@ public class ARManagerMultipleUser extends ARManager {
         for(float value : status)
             buffer.putFloat(value);
 
-        taskPeer.setAnnotationStatus(buffer.array());
+        if(enablePeer) taskPeer.setAnnotationStatus(buffer.array());
     }
 }

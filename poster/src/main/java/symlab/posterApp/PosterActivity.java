@@ -40,7 +40,7 @@ public class PosterActivity extends Activity {
     private boolean somethingRecognized = false;
     private boolean recoFlag = false;
     private byte[] callbackBuffer;
-    private boolean isCloudBased = false;
+    private boolean isCloudBased = true;
     private float touchX, touchY;
 
     @Override
@@ -76,7 +76,7 @@ public class PosterActivity extends Activity {
         mDraw.setCloudStatus(isCloudBased);
 
         mManager = new ARManager();
-        mManager.init(this, isCloudBased, true, false, true, mScene.getContentIDs());
+        mManager.init(this, isCloudBased, false, false, true, mScene.getContentIDs());
         mManager.setCallback(new ARManager.Callback() {
             @Override
             public void onMarkersReady(MarkerGroup markerGroup) {

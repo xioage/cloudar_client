@@ -5,7 +5,7 @@ extern "C" {
 #ifndef EM_H
 #define EM_H
 
-#define D 256
+#define D 512
 #define K 64
 
 void EM(char x[][D], double mu[K][D], double *pi, double z[][K], int N);

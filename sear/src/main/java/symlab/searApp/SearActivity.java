@@ -77,7 +77,7 @@ public class SearActivity extends Activity {
         scaleGestureDetector = new ScaleGestureDetector(this, new ScaleListener());
 
         mManager = new ARManagerMultipleUser();
-        mManager.init(this, true, true, false, false, mScene.getContentIDs());
+        mManager.init(this, false, true, false, true, mScene.getContentIDs());
         mManager.setCallback(new ARManager.Callback() {
             @Override
             public void onMarkersReady(MarkerGroup markerGroup) {

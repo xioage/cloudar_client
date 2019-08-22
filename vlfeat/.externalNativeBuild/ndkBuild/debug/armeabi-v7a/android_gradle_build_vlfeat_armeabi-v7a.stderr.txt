@@ -1,0 +1,4 @@
+D:/sdk_project/cloudridar_movieapp_client.git/vlfeat/src/main/jni/recognition.cpp:48:13: warning: 'convertJString' has C-linkage specified, but returns user-defined type 'std::string' (aka 'basic_string<char>') which is incompatible with C [-Wreturn-type-c-linkage]
+std::string convertJString(JNIEnv* env, jstring str) {
+            ^
+1 warning generated.
