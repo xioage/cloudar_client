@@ -11,17 +11,12 @@ done locally with a few images.
 
 ### Structure
 
-* `app` , the source code folder
-    * `CloudAR` , the app-independent CloudAR codes
-        * `marker` , marker definition
-        * `network` , send\receive packets
-        * `renderer` , rajawali wrapper
-        * `template` , useful 3D templates
-        * `track` , vision-based tracking and template matching 
-            * `MatchingTask` , local template matching codes
-    * `posterApp` , the app-dependent codes, defining app UI
+* `cloudar` , the app-independent CloudAR library codes
+* `poster` , the poster App, defining app UI
+* `sear` , the SEAR App, defining app UI
 * `opencv` , opencv java wrapper
 * `rajawali` , rajawali library
+* `vlfeat` , vlfeat library
 
 ### Citing
 
