@@ -7,7 +7,6 @@ done locally with a few images.
 
 * `OpenCV4Android` ver 3.x for basic vision processing
 * `Rajawali` as the 3D renderring engine
-* `ARCore` dev preview2 as the tracking service
 
 ### Structure
 
